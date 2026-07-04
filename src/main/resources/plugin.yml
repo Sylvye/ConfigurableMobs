@@ -1,0 +1,15 @@
+name: ConfigurableMobs
+version: ${version}
+main: com.bountysmp.configurablemobs.ConfigurableMobsPlugin
+api-version: '1.21'
+author: BountySMP
+description: GUI-first custom mob and spawn behavior editor.
+commands:
+  configurablemobs:
+    description: Opens the ConfigurableMobs editor.
+    usage: /<command> [summon|reload]
+    aliases: [cmobs]
+permissions:
+  configurablemobs.admin:
+    description: Allows using all ConfigurableMobs editor and admin commands.
+    default: op
