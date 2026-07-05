@@ -26,10 +26,16 @@ public final class CustomMobDefinition {
     private final String id;
     private String displayName;
     private EntityType baseType;
+    private boolean neverDespawns;
+    private boolean silent;
+    private boolean nameAlwaysVisible;
+    private boolean canPickUpLoot;
+    private boolean invincible;
     private final Map<EquipmentSlot, ItemStack> equipment = new EnumMap<>(EquipmentSlot.class);
     private final List<PotionEffect> potionEffects = new ArrayList<>();
     private final Set<String> scoreboardTags = new LinkedHashSet<>();
     private final Map<Attribute, Double> attributes = new LinkedHashMap<>();
+    private final List<MobTrigger> triggers = new ArrayList<>();
 
     public CustomMobDefinition(String id, String displayName, EntityType baseType) {
         this.id = id;
@@ -49,6 +55,11 @@ public final class CustomMobDefinition {
         String id = section.getString("id", "");
         EntityType baseType = parseEntityType(section.getString("base-type", "ZOMBIE"));
         CustomMobDefinition definition = new CustomMobDefinition(id, section.getString("display-name", id), baseType);
+        definition.neverDespawns = section.getBoolean("never-despawns", false);
+        definition.silent = section.getBoolean("silent", false);
+        definition.nameAlwaysVisible = section.getBoolean("name-always-visible", true);
+        definition.canPickUpLoot = section.getBoolean("can-pick-up-loot", false);
+        definition.invincible = section.getBoolean("invincible", false);
 
         ConfigurationSection equipmentSection = section.getConfigurationSection("equipment");
         if (equipmentSection != null) {
@@ -79,6 +90,13 @@ public final class CustomMobDefinition {
             }
         }
 
+        for (Map<?, ?> triggerMap : section.getMapList("triggers")) {
+            MobTrigger trigger = MobTrigger.fromMap(triggerMap);
+            if (trigger != null) {
+                definition.triggers.add(trigger);
+            }
+        }
+
         return definition;
     }
 
@@ -86,6 +104,11 @@ public final class CustomMobDefinition {
         section.set("id", id);
         section.set("display-name", displayName);
         section.set("base-type", baseType.name());
+        section.set("never-despawns", neverDespawns);
+        section.set("silent", silent);
+        section.set("name-always-visible", nameAlwaysVisible);
+        section.set("can-pick-up-loot", canPickUpLoot);
+        section.set("invincible", invincible);
 
         for (EquipmentSlot slot : EquipmentSlot.values()) {
             section.set("equipment." + slot.name(), equipment.get(slot));
@@ -97,6 +120,12 @@ public final class CustomMobDefinition {
         for (Attribute attribute : attributes.keySet()) {
             section.set("attributes." + attributeKey(attribute), attributes.get(attribute));
         }
+
+        List<Map<String, Object>> triggerMaps = new ArrayList<>();
+        for (MobTrigger trigger : triggers) {
+            triggerMaps.add(trigger.toMap());
+        }
+        section.set("triggers", triggerMaps);
     }
 
     public Entity spawn(org.bukkit.Location location, NamespacedKey customMobKey) {
@@ -109,9 +138,14 @@ public final class CustomMobDefinition {
 
     public void applyTo(LivingEntity entity, NamespacedKey customMobKey) {
         entity.getPersistentDataContainer().set(customMobKey, PersistentDataType.STRING, id);
+        entity.setRemoveWhenFarAway(!neverDespawns);
+        entity.setSilent(silent);
+        entity.setCanPickupItems(canPickUpLoot);
+        entity.setInvulnerable(invincible);
+
         if (displayName != null && !displayName.isBlank()) {
             entity.setCustomName(displayName);
-            entity.setCustomNameVisible(true);
+            entity.setCustomNameVisible(nameAlwaysVisible);
         }
 
         EntityEquipment entityEquipment = entity.getEquipment();
@@ -210,6 +244,46 @@ public final class CustomMobDefinition {
         }
     }
 
+    public boolean neverDespawns() {
+        return neverDespawns;
+    }
+
+    public void neverDespawns(boolean neverDespawns) {
+        this.neverDespawns = neverDespawns;
+    }
+
+    public boolean silent() {
+        return silent;
+    }
+
+    public void silent(boolean silent) {
+        this.silent = silent;
+    }
+
+    public boolean nameAlwaysVisible() {
+        return nameAlwaysVisible;
+    }
+
+    public void nameAlwaysVisible(boolean nameAlwaysVisible) {
+        this.nameAlwaysVisible = nameAlwaysVisible;
+    }
+
+    public boolean canPickUpLoot() {
+        return canPickUpLoot;
+    }
+
+    public void canPickUpLoot(boolean canPickUpLoot) {
+        this.canPickUpLoot = canPickUpLoot;
+    }
+
+    public boolean invincible() {
+        return invincible;
+    }
+
+    public void invincible(boolean invincible) {
+        this.invincible = invincible;
+    }
+
     public Map<EquipmentSlot, ItemStack> equipment() {
         return equipment;
     }
@@ -224,5 +298,9 @@ public final class CustomMobDefinition {
 
     public Map<Attribute, Double> attributes() {
         return attributes;
+    }
+
+    public List<MobTrigger> triggers() {
+        return triggers;
     }
 }

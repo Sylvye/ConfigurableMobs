@@ -5,6 +5,7 @@ import com.bountysmp.configurablemobs.data.CustomMobManager;
 import com.bountysmp.configurablemobs.data.SpawnRuleManager;
 import com.bountysmp.configurablemobs.gui.GuiManager;
 import com.bountysmp.configurablemobs.model.CustomMobDefinition;
+import com.bountysmp.configurablemobs.trigger.TriggerManager;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -15,6 +16,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
 public final class ConfigurableMobsCommand implements CommandExecutor, TabCompleter {
@@ -22,16 +24,19 @@ public final class ConfigurableMobsCommand implements CommandExecutor, TabComple
     private final CustomMobManager customMobManager;
     private final SpawnRuleManager spawnRuleManager;
     private final GuiManager guiManager;
+    private final TriggerManager triggerManager;
 
     public ConfigurableMobsCommand(
             ConfigurableMobsPlugin plugin,
             CustomMobManager customMobManager,
             SpawnRuleManager spawnRuleManager,
-            GuiManager guiManager) {
+            GuiManager guiManager,
+            TriggerManager triggerManager) {
         this.plugin = plugin;
         this.customMobManager = customMobManager;
         this.spawnRuleManager = spawnRuleManager;
         this.guiManager = guiManager;
+        this.triggerManager = triggerManager;
     }
 
     @Override
@@ -81,7 +86,8 @@ public final class ConfigurableMobsCommand implements CommandExecutor, TabComple
         }
         try {
             Location location = new Location(world, Double.parseDouble(args[3]), Double.parseDouble(args[4]), Double.parseDouble(args[5]));
-            definition.spawn(location, plugin.customMobKey());
+            Entity entity = definition.spawn(location, plugin.customMobKey());
+            triggerManager.fireSpawn(entity);
             sender.sendMessage("Summoned " + definition.id() + ".");
         } catch (NumberFormatException exception) {
             sender.sendMessage("Coordinates must be numbers.");

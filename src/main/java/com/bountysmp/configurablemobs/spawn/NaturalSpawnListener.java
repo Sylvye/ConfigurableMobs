@@ -3,8 +3,10 @@ package com.bountysmp.configurablemobs.spawn;
 import com.bountysmp.configurablemobs.data.SpawnRuleManager;
 import com.bountysmp.configurablemobs.model.CustomMobDefinition;
 import com.bountysmp.configurablemobs.model.WorldMobRule;
+import com.bountysmp.configurablemobs.trigger.TriggerManager;
 import java.util.Optional;
 import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Entity;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -12,10 +14,12 @@ import org.bukkit.event.entity.CreatureSpawnEvent;
 
 public final class NaturalSpawnListener implements Listener {
     private final SpawnRuleManager spawnRuleManager;
+    private final TriggerManager triggerManager;
     private final NamespacedKey customMobKey;
 
-    public NaturalSpawnListener(SpawnRuleManager spawnRuleManager, NamespacedKey customMobKey) {
+    public NaturalSpawnListener(SpawnRuleManager spawnRuleManager, TriggerManager triggerManager, NamespacedKey customMobKey) {
         this.spawnRuleManager = spawnRuleManager;
+        this.triggerManager = triggerManager;
         this.customMobKey = customMobKey;
     }
 
@@ -37,6 +41,7 @@ public final class NaturalSpawnListener implements Listener {
         }
 
         event.setCancelled(true);
-        replacement.get().spawn(event.getLocation(), customMobKey);
+        Entity entity = replacement.get().spawn(event.getLocation(), customMobKey);
+        triggerManager.fireSpawn(entity);
     }
 }

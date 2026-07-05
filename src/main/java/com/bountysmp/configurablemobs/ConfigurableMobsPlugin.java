@@ -7,6 +7,7 @@ import com.bountysmp.configurablemobs.gui.GuiManager;
 import com.bountysmp.configurablemobs.gui.PromptManager;
 import com.bountysmp.configurablemobs.spawn.CustomSpawnerManager;
 import com.bountysmp.configurablemobs.spawn.NaturalSpawnListener;
+import com.bountysmp.configurablemobs.trigger.TriggerManager;
 import org.bukkit.NamespacedKey;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -18,6 +19,7 @@ public final class ConfigurableMobsPlugin extends JavaPlugin {
     private CustomSpawnerManager customSpawnerManager;
     private PromptManager promptManager;
     private GuiManager guiManager;
+    private TriggerManager triggerManager;
 
     @Override
     public void onEnable() {
@@ -27,27 +29,33 @@ public final class ConfigurableMobsPlugin extends JavaPlugin {
         this.customMobManager = new CustomMobManager(this);
         this.spawnRuleManager = new SpawnRuleManager(this, customMobManager);
         this.promptManager = new PromptManager(this);
-        this.customSpawnerManager = new CustomSpawnerManager(this, customMobManager, customMobKey, customSpawnerKey);
-        this.guiManager = new GuiManager(this, customMobManager, spawnRuleManager, customSpawnerManager, promptManager);
+        this.triggerManager = new TriggerManager(this, customMobManager, customMobKey);
+        this.customSpawnerManager = new CustomSpawnerManager(this, customMobManager, triggerManager, customMobKey, customSpawnerKey);
+        this.guiManager = new GuiManager(this, customMobManager, spawnRuleManager, customSpawnerManager, promptManager, triggerManager);
 
         reloadAllData();
 
-        ConfigurableMobsCommand command = new ConfigurableMobsCommand(this, customMobManager, spawnRuleManager, guiManager);
+        ConfigurableMobsCommand command = new ConfigurableMobsCommand(this, customMobManager, spawnRuleManager, guiManager, triggerManager);
         getCommand("configurablemobs").setExecutor(command);
         getCommand("configurablemobs").setTabCompleter(command);
 
         getServer().getPluginManager().registerEvents(promptManager, this);
         getServer().getPluginManager().registerEvents(guiManager, this);
         getServer().getPluginManager().registerEvents(customSpawnerManager, this);
-        getServer().getPluginManager().registerEvents(new NaturalSpawnListener(spawnRuleManager, customMobKey), this);
+        getServer().getPluginManager().registerEvents(triggerManager, this);
+        getServer().getPluginManager().registerEvents(new NaturalSpawnListener(spawnRuleManager, triggerManager, customMobKey), this);
 
         customSpawnerManager.start();
+        triggerManager.start();
     }
 
     @Override
     public void onDisable() {
         if (customSpawnerManager != null) {
             customSpawnerManager.stop();
+        }
+        if (triggerManager != null) {
+            triggerManager.stop();
         }
     }
 

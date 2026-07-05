@@ -3,6 +3,7 @@ package com.bountysmp.configurablemobs.spawn;
 import com.bountysmp.configurablemobs.data.CustomMobManager;
 import com.bountysmp.configurablemobs.model.CustomMobDefinition;
 import com.bountysmp.configurablemobs.model.SpawnerSettings;
+import com.bountysmp.configurablemobs.trigger.TriggerManager;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
@@ -36,6 +37,7 @@ import org.bukkit.scheduler.BukkitTask;
 public final class CustomSpawnerManager implements Listener {
     private final JavaPlugin plugin;
     private final CustomMobManager customMobManager;
+    private final TriggerManager triggerManager;
     private final NamespacedKey customMobKey;
     private final NamespacedKey customSpawnerKey;
     private final NamespacedKey spawnCountKey;
@@ -52,10 +54,12 @@ public final class CustomSpawnerManager implements Listener {
     public CustomSpawnerManager(
             JavaPlugin plugin,
             CustomMobManager customMobManager,
+            TriggerManager triggerManager,
             NamespacedKey customMobKey,
             NamespacedKey customSpawnerKey) {
         this.plugin = plugin;
         this.customMobManager = customMobManager;
+        this.triggerManager = triggerManager;
         this.customMobKey = customMobKey;
         this.customSpawnerKey = customSpawnerKey;
         this.spawnCountKey = new NamespacedKey(plugin, "spawner_spawn_count");
@@ -175,7 +179,8 @@ public final class CustomSpawnerManager implements Listener {
         }
         event.setCancelled(true);
         Location spawnLocation = clicked.getRelative(event.getBlockFace()).getLocation().add(0.5D, 0.0D, 0.5D);
-        definition.spawn(spawnLocation, customMobKey);
+        Entity entity = definition.spawn(spawnLocation, customMobKey);
+        triggerManager.fireSpawn(entity);
         if (event.getPlayer().getGameMode() != org.bukkit.GameMode.CREATIVE) {
             event.getItem().subtract();
         }
@@ -239,7 +244,8 @@ public final class CustomSpawnerManager implements Listener {
             int spawnCount = Math.min(settings.spawnCount(), settings.maxNearby() - nearbyCount);
             for (int count = 0; count < spawnCount; count++) {
                 Location spawnLocation = randomSpawnLocation(location, settings.spawnRange());
-                definition.spawn(spawnLocation, customMobKey);
+                Entity entity = definition.spawn(spawnLocation, customMobKey);
+                triggerManager.fireSpawn(entity);
             }
             entry.getValue().nextSpawnTick(nextSpawnTick(settings));
         }

@@ -4,10 +4,13 @@ import com.bountysmp.configurablemobs.ConfigurableMobsPlugin;
 import com.bountysmp.configurablemobs.data.CustomMobManager;
 import com.bountysmp.configurablemobs.data.SpawnRuleManager;
 import com.bountysmp.configurablemobs.model.CustomMobDefinition;
+import com.bountysmp.configurablemobs.model.MobTrigger;
 import com.bountysmp.configurablemobs.model.ReplacementRule;
 import com.bountysmp.configurablemobs.model.SpawnerSettings;
+import com.bountysmp.configurablemobs.model.TriggerType;
 import com.bountysmp.configurablemobs.model.WorldMobRule;
 import com.bountysmp.configurablemobs.spawn.CustomSpawnerManager;
+import com.bountysmp.configurablemobs.trigger.TriggerManager;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -21,6 +24,7 @@ import org.bukkit.Registry;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -56,18 +60,21 @@ public final class GuiManager implements Listener {
     private final SpawnRuleManager spawnRuleManager;
     private final CustomSpawnerManager customSpawnerManager;
     private final PromptManager promptManager;
+    private final TriggerManager triggerManager;
 
     public GuiManager(
             ConfigurableMobsPlugin plugin,
             CustomMobManager customMobManager,
             SpawnRuleManager spawnRuleManager,
             CustomSpawnerManager customSpawnerManager,
-            PromptManager promptManager) {
+            PromptManager promptManager,
+            TriggerManager triggerManager) {
         this.plugin = plugin;
         this.customMobManager = customMobManager;
         this.spawnRuleManager = spawnRuleManager;
         this.customSpawnerManager = customSpawnerManager;
         this.promptManager = promptManager;
+        this.triggerManager = triggerManager;
     }
 
     public void openMain(Player player) {
@@ -97,6 +104,10 @@ public final class GuiManager implements Listener {
             case MOB_LIST -> clickMobList(player, event.getSlot());
             case MOB_EDITOR -> clickMobEditor(player, holder.context(), event.getSlot(), event.getClick());
             case BASE_MOB_SELECTOR -> clickBaseMobSelector(player, holder.context(), event.getSlot());
+            case RULES -> clickRules(player, holder.context(), event.getSlot());
+            case TRIGGERS -> clickTriggers(player, holder.context(), event.getSlot(), event.isRightClick());
+            case TRIGGER_TYPE_SELECTOR -> clickTriggerTypeSelector(player, holder.context(), event.getSlot());
+            case TRIGGER_EDITOR -> clickTriggerEditor(player, holder.context(), event.getSlot());
             case EQUIPMENT -> clickEquipment(player, holder.context(), event.getSlot(), event.getCursor());
             case EFFECTS -> clickEffects(player, holder.context(), event.getSlot());
             case TAGS -> clickTags(player, holder.context(), event.getSlot());
@@ -175,9 +186,16 @@ public final class GuiManager implements Listener {
         inventory.setItem(12, item(Material.NAME_TAG, GuiUtil.Tone.WARNING, "Display Name", List.of(definition.displayName(), "Click to edit.")));
         inventory.setItem(14, item(Material.IRON_CHESTPLATE, GuiUtil.Tone.INFO, "Equipment", List.of("Edit starting gear.")));
         inventory.setItem(16, item(Material.POTION, GuiUtil.Tone.INFO, "Potion Effects", List.of(definition.potionEffects().size() + " effects.")));
+        inventory.setItem(22, item(Material.COMPARATOR, GuiUtil.Tone.INFO, "Rules",
+                List.of("Never despawns: " + enabledText(definition.neverDespawns()),
+                        "Silent: " + enabledText(definition.silent()),
+                        "Name always visible: " + enabledText(definition.nameAlwaysVisible()),
+                        "Can pick up loot: " + enabledText(definition.canPickUpLoot()),
+                        "Invincible: " + enabledText(definition.invincible()))));
         inventory.setItem(29, item(Material.OAK_SIGN, GuiUtil.Tone.INFO, "Scoreboard Tags", List.of(definition.scoreboardTags().size() + " tags.")));
         inventory.setItem(31, item(Material.ANVIL, GuiUtil.Tone.INFO, "Attributes", List.of(definition.attributes().size() + " overrides.")));
         inventory.setItem(33, item(Material.ENDER_PEARL, GuiUtil.Tone.SUCCESS, "Test Summon", List.of("Summons at your location.")));
+        inventory.setItem(35, item(Material.COMMAND_BLOCK, GuiUtil.Tone.INFO, "Triggers", List.of(definition.triggers().size() + " triggers.", "Custom mob behavior.")));
         inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
         player.openInventory(inventory);
     }
@@ -200,13 +218,18 @@ public final class GuiManager implements Listener {
             openEquipment(player, mobId);
         } else if (slot == 16) {
             openEffects(player, mobId);
+        } else if (slot == 22) {
+            openRules(player, mobId);
         } else if (slot == 29) {
             openTags(player, mobId);
         } else if (slot == 31) {
             openAttributes(player, mobId);
         } else if (slot == 33) {
-            definition.spawn(player.getLocation(), plugin.customMobKey());
+            Entity entity = definition.spawn(player.getLocation(), plugin.customMobKey());
+            triggerManager.fireSpawn(entity);
             player.sendMessage("Summoned " + mobId + ".");
+        } else if (slot == 35) {
+            openTriggers(player, mobId);
         } else if (slot == 49) {
             openMobList(player);
         }
@@ -264,6 +287,233 @@ public final class GuiManager implements Listener {
         openMobEditor(player, selector.mobId());
     }
 
+    private void openRules(Player player, String mobId) {
+        CustomMobDefinition definition = customMobManager.get(mobId).orElse(null);
+        if (definition == null) {
+            openMobList(player);
+            return;
+        }
+        Inventory inventory = create(MenuType.RULES, mobId, "Rules: " + mobId, 54);
+        inventory.setItem(10, toggleItem("Never Despawns", definition.neverDespawns(),
+                List.of("Mob will not despawn from distance.", "Click to toggle.")));
+        inventory.setItem(12, toggleItem("Silent", definition.silent(),
+                List.of("Mob will not make sounds.", "Click to toggle.")));
+        inventory.setItem(14, toggleItem("Name Always Visible", definition.nameAlwaysVisible(),
+                List.of("Nameplate stays visible.", "Click to toggle.")));
+        inventory.setItem(16, toggleItem("Can Pick Up Loot", definition.canPickUpLoot(),
+                List.of("Mob can pick up dropped items.", "Click to toggle.")));
+        inventory.setItem(22, toggleItem("Invincible", definition.invincible(),
+                List.of("Mob cannot take damage.", "Click to toggle.")));
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
+        player.openInventory(inventory);
+    }
+
+    private void clickRules(Player player, String mobId, int slot) {
+        CustomMobDefinition definition = customMobManager.get(mobId).orElse(null);
+        if (definition == null) {
+            openMobList(player);
+            return;
+        }
+        if (slot == 10) {
+            definition.neverDespawns(!definition.neverDespawns());
+            customMobManager.save(definition);
+            openRules(player, mobId);
+        } else if (slot == 12) {
+            definition.silent(!definition.silent());
+            customMobManager.save(definition);
+            openRules(player, mobId);
+        } else if (slot == 14) {
+            definition.nameAlwaysVisible(!definition.nameAlwaysVisible());
+            customMobManager.save(definition);
+            openRules(player, mobId);
+        } else if (slot == 16) {
+            definition.canPickUpLoot(!definition.canPickUpLoot());
+            customMobManager.save(definition);
+            openRules(player, mobId);
+        } else if (slot == 22) {
+            definition.invincible(!definition.invincible());
+            customMobManager.save(definition);
+            openRules(player, mobId);
+        } else if (slot == 49) {
+            openMobEditor(player, mobId);
+        }
+    }
+
+    private void openTriggers(Player player, String mobId) {
+        CustomMobDefinition definition = customMobManager.get(mobId).orElse(null);
+        if (definition == null) {
+            openMobList(player);
+            return;
+        }
+        Inventory inventory = create(MenuType.TRIGGERS, mobId, "Triggers: " + mobId, 54);
+        for (int slot = 0; slot < Math.min(45, definition.triggers().size()); slot++) {
+            MobTrigger trigger = definition.triggers().get(slot);
+            List<String> lore = new ArrayList<>();
+            lore.add("Commands: " + trigger.commands().size());
+            if (trigger.type() == TriggerType.ON_STEP) {
+                lore.add("Step Rate: " + trigger.stepRateTicks() + " ticks");
+            }
+            lore.add("Left click to edit.");
+            lore.add("Right click to remove.");
+            inventory.setItem(slot, item(triggerMaterial(trigger.type()), GuiUtil.Tone.INFO, trigger.label(), lore));
+        }
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
+        inventory.setItem(53, item(Material.LIME_CONCRETE, GuiUtil.Tone.SUCCESS, "Add Trigger", List.of("Choose a trigger type.")));
+        player.openInventory(inventory);
+    }
+
+    private void clickTriggers(Player player, String mobId, int slot, boolean rightClick) {
+        CustomMobDefinition definition = customMobManager.get(mobId).orElse(null);
+        if (definition == null) {
+            openMobList(player);
+            return;
+        }
+        if (slot == 49) {
+            openMobEditor(player, mobId);
+            return;
+        }
+        if (slot == 53) {
+            openTriggerTypeSelector(player, mobId);
+            return;
+        }
+        if (slot < 0 || slot >= definition.triggers().size()) {
+            return;
+        }
+        if (rightClick) {
+            definition.triggers().remove(slot);
+            customMobManager.save(definition);
+            openTriggers(player, mobId);
+            return;
+        }
+        openTriggerEditor(player, mobId, slot);
+    }
+
+    private void openTriggerTypeSelector(Player player, String mobId) {
+        if (customMobManager.get(mobId).isEmpty()) {
+            openMobList(player);
+            return;
+        }
+        Inventory inventory = create(MenuType.TRIGGER_TYPE_SELECTOR, mobId, "Choose Trigger", 54);
+        int[] slots = {10, 11, 12, 14, 15, 16};
+        TriggerType[] types = TriggerType.values();
+        for (int index = 0; index < types.length && index < slots.length; index++) {
+            TriggerType type = types[index];
+            inventory.setItem(slots[index], item(triggerMaterial(type), GuiUtil.Tone.INFO, triggerLabel(type), List.of(triggerDescription(type), "Click to add.")));
+        }
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
+        player.openInventory(inventory);
+    }
+
+    private void clickTriggerTypeSelector(Player player, String mobId, int slot) {
+        CustomMobDefinition definition = customMobManager.get(mobId).orElse(null);
+        if (definition == null) {
+            openMobList(player);
+            return;
+        }
+        if (slot == 49) {
+            openTriggers(player, mobId);
+            return;
+        }
+        TriggerType type = switch (slot) {
+            case 10 -> TriggerType.ON_HIT;
+            case 11 -> TriggerType.ON_KILL;
+            case 12 -> TriggerType.ON_HURT;
+            case 14 -> TriggerType.ON_DEATH;
+            case 15 -> TriggerType.ON_SPAWN;
+            case 16 -> TriggerType.ON_STEP;
+            default -> null;
+        };
+        if (type == null) {
+            return;
+        }
+        if (definition.triggers().size() >= 45) {
+            player.sendMessage("This mob already has the maximum visible triggers.");
+            openTriggers(player, mobId);
+            return;
+        }
+        definition.triggers().add(new MobTrigger(type));
+        customMobManager.save(definition);
+        openTriggerEditor(player, mobId, definition.triggers().size() - 1);
+    }
+
+    private void openTriggerEditor(Player player, String mobId, int triggerIndex) {
+        CustomMobDefinition definition = customMobManager.get(mobId).orElse(null);
+        if (definition == null) {
+            openMobList(player);
+            return;
+        }
+        if (triggerIndex < 0 || triggerIndex >= definition.triggers().size()) {
+            openTriggers(player, mobId);
+            return;
+        }
+        MobTrigger trigger = definition.triggers().get(triggerIndex);
+        Inventory inventory = create(MenuType.TRIGGER_EDITOR, triggerContext(mobId, triggerIndex), trigger.label() + ": " + mobId, 54);
+        inventory.setItem(10, item(triggerMaterial(trigger.type()), GuiUtil.Tone.INFO, trigger.label(), List.of(triggerDescription(trigger.type()))));
+        if (trigger.type() == TriggerType.ON_STEP) {
+            inventory.setItem(12, item(Material.CLOCK, GuiUtil.Tone.WARNING, "Step Rate", List.of(trigger.stepRateTicks() + " ticks", "Click to edit.")));
+        }
+        for (int slot = 18; slot < 45 && slot - 18 < trigger.commands().size(); slot++) {
+            String command = trigger.commands().get(slot - 18);
+            inventory.setItem(slot, item(Material.COMMAND_BLOCK, GuiUtil.Tone.INFO, command, List.of("Click to remove.")));
+        }
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
+        inventory.setItem(53, item(Material.LIME_CONCRETE, GuiUtil.Tone.SUCCESS, "Add Command", List.of("Runs as console.", "Use {SELF}, {TARGET}, {ATTACKER}, RAND[min,max].")));
+        player.openInventory(inventory);
+    }
+
+    private void clickTriggerEditor(Player player, String context, int slot) {
+        TriggerEditorContext editor = TriggerEditorContext.parse(context);
+        CustomMobDefinition definition = customMobManager.get(editor.mobId()).orElse(null);
+        if (definition == null) {
+            openMobList(player);
+            return;
+        }
+        if (editor.triggerIndex() < 0 || editor.triggerIndex() >= definition.triggers().size()) {
+            openTriggers(player, editor.mobId());
+            return;
+        }
+        MobTrigger trigger = definition.triggers().get(editor.triggerIndex());
+        if (slot == 49) {
+            openTriggers(player, editor.mobId());
+            return;
+        }
+        if (slot == 53) {
+            promptManager.prompt(player, "Enter command. Use {SELF}, {TARGET}, {ATTACKER}, RAND[min,max].", input -> {
+                String command = input.startsWith("/") ? input.substring(1) : input;
+                if (trigger.commands().size() >= 27) {
+                    player.sendMessage("This trigger already has the maximum visible commands.");
+                } else if (command.isBlank()) {
+                    player.sendMessage("Command cannot be blank.");
+                } else {
+                    trigger.commands().add(command);
+                    customMobManager.save(definition);
+                }
+                openTriggerEditor(player, editor.mobId(), editor.triggerIndex());
+            });
+            return;
+        }
+        if (slot == 12 && trigger.type() == TriggerType.ON_STEP) {
+            promptManager.prompt(player, "Enter step rate in ticks. Example: 20", input -> {
+                try {
+                    trigger.stepRateTicks(Integer.parseInt(input));
+                    customMobManager.save(definition);
+                } catch (NumberFormatException exception) {
+                    player.sendMessage("Step rate must be a whole number.");
+                }
+                openTriggerEditor(player, editor.mobId(), editor.triggerIndex());
+            });
+            return;
+        }
+        if (slot >= 18 && slot < 45) {
+            int commandIndex = slot - 18;
+            if (commandIndex < trigger.commands().size()) {
+                trigger.commands().remove(commandIndex);
+                customMobManager.save(definition);
+                openTriggerEditor(player, editor.mobId(), editor.triggerIndex());
+            }
+        }
+    }
+
     private void openEquipment(Player player, String mobId) {
         CustomMobDefinition definition = customMobManager.get(mobId).orElse(null);
         if (definition == null) {
@@ -271,13 +521,13 @@ public final class GuiManager implements Listener {
             return;
         }
         Inventory inventory = create(MenuType.EQUIPMENT, mobId, "Equipment: " + mobId, 54);
-        setEquipmentButton(inventory, definition, 10, EquipmentSlot.HAND, "Main Hand");
-        setEquipmentButton(inventory, definition, 12, EquipmentSlot.OFF_HAND, "Off Hand");
-        setEquipmentButton(inventory, definition, 14, EquipmentSlot.HEAD, "Helmet");
-        setEquipmentButton(inventory, definition, 19, EquipmentSlot.CHEST, "Chestplate");
-        setEquipmentButton(inventory, definition, 21, EquipmentSlot.LEGS, "Leggings");
-        setEquipmentButton(inventory, definition, 23, EquipmentSlot.FEET, "Boots");
-        inventory.setItem(40, item(Material.ARMOR_STAND, GuiUtil.Tone.SUCCESS, "Copy Your Equipment", List.of("Copies your worn and held items.")));
+        setEquipmentButton(inventory, definition, 11, EquipmentSlot.HEAD, "Helmet");
+        setEquipmentButton(inventory, definition, 20, EquipmentSlot.CHEST, "Chestplate");
+        setEquipmentButton(inventory, definition, 29, EquipmentSlot.LEGS, "Leggings");
+        setEquipmentButton(inventory, definition, 38, EquipmentSlot.FEET, "Boots");
+        setEquipmentButton(inventory, definition, 14, EquipmentSlot.HAND, "Main Hand");
+        setEquipmentButton(inventory, definition, 15, EquipmentSlot.OFF_HAND, "Off Hand");
+        inventory.setItem(42, item(Material.ARMOR_STAND, GuiUtil.Tone.SUCCESS, "Copy Your Equipment", List.of("Copies your worn and held items.")));
         inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
         player.openInventory(inventory);
     }
@@ -289,12 +539,12 @@ public final class GuiManager implements Listener {
             return;
         }
         EquipmentSlot equipmentSlot = switch (slot) {
-            case 10 -> EquipmentSlot.HAND;
-            case 12 -> EquipmentSlot.OFF_HAND;
-            case 14 -> EquipmentSlot.HEAD;
-            case 19 -> EquipmentSlot.CHEST;
-            case 21 -> EquipmentSlot.LEGS;
-            case 23 -> EquipmentSlot.FEET;
+            case 11 -> EquipmentSlot.HEAD;
+            case 20 -> EquipmentSlot.CHEST;
+            case 29 -> EquipmentSlot.LEGS;
+            case 38 -> EquipmentSlot.FEET;
+            case 14 -> EquipmentSlot.HAND;
+            case 15 -> EquipmentSlot.OFF_HAND;
             default -> null;
         };
         if (equipmentSlot != null) {
@@ -309,7 +559,7 @@ public final class GuiManager implements Listener {
             openEquipment(player, mobId);
             return;
         }
-        if (slot == 40) {
+        if (slot == 42) {
             PlayerInventory inventory = player.getInventory();
             copyEquipment(definition, EquipmentSlot.HAND, inventory.getItemInMainHand());
             copyEquipment(definition, EquipmentSlot.OFF_HAND, inventory.getItemInOffHand());
@@ -699,6 +949,17 @@ public final class GuiManager implements Listener {
         return GuiUtil.item(material, tone, name, lore);
     }
 
+    private ItemStack toggleItem(String label, boolean enabled, List<String> lore) {
+        return item(enabled ? Material.LIME_DYE : Material.GRAY_DYE,
+                enabled ? GuiUtil.Tone.SUCCESS : GuiUtil.Tone.MUTED,
+                label + ": " + enabledText(enabled),
+                lore);
+    }
+
+    private String enabledText(boolean enabled) {
+        return enabled ? "Enabled" : "Disabled";
+    }
+
     private void setEquipmentButton(Inventory inventory, CustomMobDefinition definition, int slot, EquipmentSlot equipmentSlot, String label) {
         ItemStack current = definition.equipment().get(equipmentSlot);
         if (current == null || current.getType().isAir()) {
@@ -746,8 +1007,38 @@ public final class GuiManager implements Listener {
         return material == null ? Material.ZOMBIE_SPAWN_EGG : material;
     }
 
+    private Material triggerMaterial(TriggerType type) {
+        return switch (type) {
+            case ON_HIT -> Material.IRON_SWORD;
+            case ON_KILL -> Material.DIAMOND_SWORD;
+            case ON_HURT -> Material.SHIELD;
+            case ON_DEATH -> Material.SKELETON_SKULL;
+            case ON_SPAWN -> Material.TURTLE_EGG;
+            case ON_STEP -> Material.CLOCK;
+        };
+    }
+
+    private String triggerLabel(TriggerType type) {
+        return new MobTrigger(type).label();
+    }
+
+    private String triggerDescription(TriggerType type) {
+        return switch (type) {
+            case ON_HIT -> "Runs when this mob hits a target.";
+            case ON_KILL -> "Runs when this mob kills a target.";
+            case ON_HURT -> "Runs when this mob is hurt.";
+            case ON_DEATH -> "Runs when this mob dies.";
+            case ON_SPAWN -> "Runs when this mob spawns.";
+            case ON_STEP -> "Runs on a repeated tick interval.";
+        };
+    }
+
     private String selectorContext(String mobId, int page, String query) {
         return mobId + "|" + page + "|" + (query == null ? "" : query.replace("|", ""));
+    }
+
+    private String triggerContext(String mobId, int triggerIndex) {
+        return mobId + "|" + triggerIndex;
     }
 
     private String spawnerContext(String mobId, SpawnerSettings settings) {
@@ -813,6 +1104,15 @@ public final class GuiManager implements Listener {
             int page = parts.length > 1 ? parseInt(parts[1], 0) : 0;
             String query = parts.length > 2 ? parts[2] : "";
             return new SelectorContext(mobId, page, query);
+        }
+    }
+
+    private record TriggerEditorContext(String mobId, int triggerIndex) {
+        private static TriggerEditorContext parse(String context) {
+            String[] parts = context.split("\\|", -1);
+            String mobId = parts.length > 0 ? parts[0] : "";
+            int triggerIndex = parts.length > 1 ? parseInt(parts[1], -1) : -1;
+            return new TriggerEditorContext(mobId, triggerIndex);
         }
     }
 
