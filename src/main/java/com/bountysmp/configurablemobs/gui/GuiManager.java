@@ -5,12 +5,14 @@ import com.bountysmp.configurablemobs.data.CustomMobManager;
 import com.bountysmp.configurablemobs.data.SpawnRuleManager;
 import com.bountysmp.configurablemobs.model.CustomMobDefinition;
 import com.bountysmp.configurablemobs.model.ReplacementRule;
+import com.bountysmp.configurablemobs.model.SpawnerSettings;
 import com.bountysmp.configurablemobs.model.WorldMobRule;
 import com.bountysmp.configurablemobs.spawn.CustomSpawnerManager;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Function;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -18,6 +20,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -94,11 +97,13 @@ public final class GuiManager implements Listener {
             case MAIN -> clickMain(player, event.getSlot());
             case MOB_LIST -> clickMobList(player, event.getSlot());
             case MOB_EDITOR -> clickMobEditor(player, holder.context(), event.getSlot(), event.getClick());
+            case BASE_MOB_SELECTOR -> clickBaseMobSelector(player, holder.context(), event.getSlot());
             case EQUIPMENT -> clickEquipment(player, holder.context(), event.getSlot(), event.getCursor());
             case EFFECTS -> clickEffects(player, holder.context(), event.getSlot());
             case TAGS -> clickTags(player, holder.context(), event.getSlot());
             case ATTRIBUTES -> clickAttributes(player, holder.context(), event.getSlot(), event.isRightClick());
             case TOOLS -> clickTools(player, event.getSlot(), event.isRightClick());
+            case SPAWNER_EDITOR -> clickSpawnerEditor(player, holder.context(), event.getSlot());
             case SPAWN_WORLDS -> clickSpawnWorlds(player, event.getSlot());
             case SPAWN_MOBS -> clickSpawnMobs(player, holder.context(), event.getSlot());
             case SPAWN_RULE -> clickSpawnRule(player, holder.context(), event.getSlot());
@@ -122,9 +127,7 @@ public final class GuiManager implements Listener {
             if (slot >= 45) {
                 break;
             }
-            inventory.setItem(slot++, item(Material.matchMaterial(definition.baseType().name() + "_SPAWN_EGG") == null
-                    ? Material.ZOMBIE_SPAWN_EGG
-                    : Material.matchMaterial(definition.baseType().name() + "_SPAWN_EGG"),
+            inventory.setItem(slot++, item(eggMaterial(definition.baseType()),
                     definition.id(),
                     List.of("Base: " + definition.baseType().name(), "Click to edit.")));
         }
@@ -169,7 +172,7 @@ public final class GuiManager implements Listener {
             return;
         }
         Inventory inventory = create(MenuType.MOB_EDITOR, mobId, "Mob: " + mobId, 54);
-        inventory.setItem(10, item(Material.ZOMBIE_HEAD, "Base Mob", List.of(definition.baseType().name(), "Left/right click to cycle.")));
+        inventory.setItem(10, item(eggMaterial(definition.baseType()), "Base Mob", List.of(definition.baseType().name(), "Click to choose.")));
         inventory.setItem(12, item(Material.NAME_TAG, "Display Name", List.of(definition.displayName(), "Click to edit.")));
         inventory.setItem(14, item(Material.IRON_CHESTPLATE, "Equipment", List.of("Edit starting gear.")));
         inventory.setItem(16, item(Material.POTION, "Potion Effects", List.of(definition.potionEffects().size() + " effects.")));
@@ -187,16 +190,7 @@ public final class GuiManager implements Listener {
             return;
         }
         if (slot == 10) {
-            int current = MOB_TYPES.indexOf(definition.baseType());
-            int next = click == ClickType.RIGHT ? current - 1 : current + 1;
-            if (next < 0) {
-                next = MOB_TYPES.size() - 1;
-            } else if (next >= MOB_TYPES.size()) {
-                next = 0;
-            }
-            definition.baseType(MOB_TYPES.get(next));
-            customMobManager.save(definition);
-            openMobEditor(player, mobId);
+            openBaseMobSelector(player, mobId, 0, "");
         } else if (slot == 12) {
             promptManager.prompt(player, "Enter display name.", input -> {
                 definition.displayName(ChatColor.translateAlternateColorCodes('&', input));
@@ -217,6 +211,58 @@ public final class GuiManager implements Listener {
         } else if (slot == 49) {
             openMobList(player);
         }
+    }
+
+    private void openBaseMobSelector(Player player, String mobId, int page, String query) {
+        List<EntityType> filtered = filteredMobTypes(query);
+        int maxPage = Math.max(0, (filtered.size() - 1) / 45);
+        int safePage = Math.max(0, Math.min(page, maxPage));
+        Inventory inventory = create(MenuType.BASE_MOB_SELECTOR, selectorContext(mobId, safePage, query), "Choose Base Mob", 54);
+        int start = safePage * 45;
+        for (int index = 0; index < 45 && start + index < filtered.size(); index++) {
+            EntityType type = filtered.get(start + index);
+            inventory.setItem(index, item(eggMaterial(type), type.name(), List.of("Click to select.")));
+        }
+        inventory.setItem(45, item(Material.ARROW, "Previous Page", List.of("Page " + (safePage + 1) + " of " + (maxPage + 1))));
+        inventory.setItem(48, item(Material.BARRIER, "Back", List.of()));
+        inventory.setItem(49, item(Material.COMPASS, "Search", List.of(query.isBlank() ? "No filter." : "Filter: " + query)));
+        inventory.setItem(53, item(Material.ARROW, "Next Page", List.of("Page " + (safePage + 1) + " of " + (maxPage + 1))));
+        player.openInventory(inventory);
+    }
+
+    private void clickBaseMobSelector(Player player, String context, int slot) {
+        SelectorContext selector = SelectorContext.parse(context);
+        if (slot == 48) {
+            openMobEditor(player, selector.mobId());
+            return;
+        }
+        if (slot == 49) {
+            promptManager.prompt(player, "Enter mob search text.", input ->
+                    openBaseMobSelector(player, selector.mobId(), 0, input.replace("|", "").toLowerCase(Locale.ROOT)));
+            return;
+        }
+        if (slot == 45) {
+            openBaseMobSelector(player, selector.mobId(), selector.page() - 1, selector.query());
+            return;
+        }
+        if (slot == 53) {
+            openBaseMobSelector(player, selector.mobId(), selector.page() + 1, selector.query());
+            return;
+        }
+
+        List<EntityType> filtered = filteredMobTypes(selector.query());
+        int index = selector.page() * 45 + slot;
+        if (slot < 0 || slot >= 45 || index >= filtered.size()) {
+            return;
+        }
+        CustomMobDefinition definition = customMobManager.get(selector.mobId()).orElse(null);
+        if (definition == null) {
+            openMobList(player);
+            return;
+        }
+        definition.baseType(filtered.get(index));
+        customMobManager.save(definition);
+        openMobEditor(player, selector.mobId());
     }
 
     private void openEquipment(Player player, String mobId) {
@@ -393,8 +439,15 @@ public final class GuiManager implements Listener {
             Attribute attribute = CustomMobDefinition.parseAttribute(COMMON_ATTRIBUTES.get(slot));
             if (attribute != null) {
                 Double value = definition.attributes().get(attribute);
+                String defaultText = defaultAttributeText(definition.baseType(), attribute);
                 inventory.setItem(slot, item(Material.ANVIL, COMMON_ATTRIBUTES.get(slot),
-                        List.of("Value: " + (value == null ? "default" : value), "Left click to set.", "Right click to clear.")));
+                        List.of("Value: " + (value == null ? "default (" + defaultText + ")" : value),
+                                "Left click to set.",
+                                "Right click to reset to default.")));
+                if (value != null) {
+                    inventory.setItem(slot + 27, item(Material.BARRIER, "Reset " + COMMON_ATTRIBUTES.get(slot),
+                            List.of("Current: " + value, "Default: " + defaultText, "Click to reset.")));
+                }
             }
         }
         inventory.setItem(49, item(Material.ARROW, "Back", List.of()));
@@ -409,6 +462,15 @@ public final class GuiManager implements Listener {
         }
         if (slot == 49) {
             openMobEditor(player, mobId);
+            return;
+        }
+        if (slot >= 27 && slot < 27 + COMMON_ATTRIBUTES.size()) {
+            Attribute attribute = CustomMobDefinition.parseAttribute(COMMON_ATTRIBUTES.get(slot - 27));
+            if (attribute != null) {
+                definition.attributes().remove(attribute);
+                customMobManager.save(definition);
+                openAttributes(player, mobId);
+            }
             return;
         }
         if (slot < 0 || slot >= COMMON_ATTRIBUTES.size()) {
@@ -457,10 +519,66 @@ public final class GuiManager implements Listener {
         if (definition == null) {
             return;
         }
-        player.getInventory().addItem(rightClick
-                ? customSpawnerManager.createSpawnerItem(definition)
-                : customSpawnerManager.createEggItem(definition));
-        player.sendMessage("Added " + (rightClick ? "spawner" : "egg") + " for " + definition.id() + ".");
+        if (rightClick) {
+            openSpawnerEditor(player, definition.id(), SpawnerSettings.DEFAULT);
+            return;
+        }
+        player.getInventory().addItem(customSpawnerManager.createEggItem(definition));
+        player.sendMessage("Added egg for " + definition.id() + ".");
+    }
+
+    private void openSpawnerEditor(Player player, String mobId, SpawnerSettings settings) {
+        if (customMobManager.get(mobId).isEmpty()) {
+            openTools(player);
+            return;
+        }
+        Inventory inventory = create(MenuType.SPAWNER_EDITOR, spawnerContext(mobId, settings), "Spawner: " + mobId, 54);
+        inventory.setItem(10, item(Material.EGG, "Spawn Count", List.of(String.valueOf(settings.spawnCount()), "Click to edit.")));
+        inventory.setItem(11, item(Material.COMPASS, "Spawn Range", List.of(String.valueOf(settings.spawnRange()), "Click to edit.")));
+        inventory.setItem(12, item(Material.ZOMBIE_HEAD, "Max Nearby", List.of(String.valueOf(settings.maxNearby()), "Click to edit.")));
+        inventory.setItem(13, item(Material.CLOCK, "Delay", List.of(settings.delaySeconds() + " seconds", "Click to edit.")));
+        inventory.setItem(14, item(Material.REPEATER, "Random Delay Range", List.of("0-" + settings.randomDelaySeconds() + " seconds", "Click to edit.")));
+        inventory.setItem(15, item(Material.PLAYER_HEAD, "Required Player Range", List.of(String.valueOf(settings.requiredPlayerRange()), "Click to edit.")));
+        inventory.setItem(16, item(settings.dropWithSilkTouch() ? Material.LIME_DYE : Material.GRAY_DYE,
+                "Silk Touch Drop: " + (settings.dropWithSilkTouch() ? "Enabled" : "Disabled"),
+                List.of("Click to toggle.", "Default: disabled.")));
+        inventory.setItem(31, item(Material.SPAWNER, "Generate Spawner", List.of("Adds the configured spawner item.")));
+        inventory.setItem(49, item(Material.ARROW, "Back", List.of()));
+        player.openInventory(inventory);
+    }
+
+    private void clickSpawnerEditor(Player player, String context, int slot) {
+        SpawnerEditorContext editor = SpawnerEditorContext.parse(context);
+        SpawnerSettings settings = editor.settings();
+        if (slot == 49) {
+            openTools(player);
+            return;
+        }
+        if (slot == 31) {
+            CustomMobDefinition definition = customMobManager.get(editor.mobId()).orElse(null);
+            if (definition == null) {
+                openTools(player);
+                return;
+            }
+            player.getInventory().addItem(customSpawnerManager.createSpawnerItem(definition, settings));
+            player.sendMessage("Added configured spawner for " + definition.id() + ".");
+            openTools(player);
+            return;
+        }
+        if (slot == 16) {
+            openSpawnerEditor(player, editor.mobId(), settings.withDropWithSilkTouch(!settings.dropWithSilkTouch()));
+            return;
+        }
+        switch (slot) {
+            case 10 -> promptSpawnerInt(player, editor.mobId(), settings, "spawn count", value -> settings.withSpawnCount(value));
+            case 11 -> promptSpawnerInt(player, editor.mobId(), settings, "spawn range", value -> settings.withSpawnRange(value));
+            case 12 -> promptSpawnerInt(player, editor.mobId(), settings, "max nearby", value -> settings.withMaxNearby(value));
+            case 13 -> promptSpawnerInt(player, editor.mobId(), settings, "delay seconds", value -> settings.withDelaySeconds(value));
+            case 14 -> promptSpawnerInt(player, editor.mobId(), settings, "random delay range seconds", value -> settings.withRandomDelaySeconds(value));
+            case 15 -> promptSpawnerInt(player, editor.mobId(), settings, "required player range", value -> settings.withRequiredPlayerRange(value));
+            default -> {
+            }
+        }
     }
 
     private void openSpawnWorlds(Player player) {
@@ -615,6 +733,72 @@ public final class GuiManager implements Listener {
         return slot < mobs.size() ? mobs.get(slot) : null;
     }
 
+    private List<EntityType> filteredMobTypes(String query) {
+        String normalized = query == null ? "" : query.toLowerCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            return MOB_TYPES;
+        }
+        return MOB_TYPES.stream()
+                .filter(type -> type.name().toLowerCase(Locale.ROOT).contains(normalized))
+                .toList();
+    }
+
+    private Material eggMaterial(EntityType type) {
+        Material material = Material.matchMaterial(type.name() + "_SPAWN_EGG");
+        return material == null ? Material.ZOMBIE_SPAWN_EGG : material;
+    }
+
+    private String selectorContext(String mobId, int page, String query) {
+        return mobId + "|" + page + "|" + (query == null ? "" : query.replace("|", ""));
+    }
+
+    private String spawnerContext(String mobId, SpawnerSettings settings) {
+        return String.join("|",
+                mobId,
+                String.valueOf(settings.spawnCount()),
+                String.valueOf(settings.spawnRange()),
+                String.valueOf(settings.maxNearby()),
+                String.valueOf(settings.delayTicks()),
+                String.valueOf(settings.randomDelayTicks()),
+                String.valueOf(settings.requiredPlayerRange()),
+                String.valueOf(settings.dropWithSilkTouch()));
+    }
+
+    private void promptSpawnerInt(
+            Player player,
+            String mobId,
+            SpawnerSettings settings,
+            String label,
+            Function<Integer, SpawnerSettings> updater) {
+        promptManager.prompt(player, "Enter " + label + " as a whole number.", input -> {
+            try {
+                openSpawnerEditor(player, mobId, updater.apply(Integer.parseInt(input)));
+            } catch (NumberFormatException exception) {
+                player.sendMessage("Value must be a whole number.");
+                openSpawnerEditor(player, mobId, settings);
+            }
+        });
+    }
+
+    private String defaultAttributeText(EntityType type, Attribute attribute) {
+        if (!type.hasDefaultAttributes()) {
+            return "unavailable";
+        }
+        AttributeInstance instance = type.getDefaultAttributes().getAttribute(attribute);
+        if (instance == null) {
+            return "unavailable";
+        }
+        return formatDecimal(instance.getDefaultValue());
+    }
+
+    private String formatDecimal(double value) {
+        String formatted = String.format(Locale.US, "%.3f", value);
+        while (formatted.contains(".") && formatted.endsWith("0")) {
+            formatted = formatted.substring(0, formatted.length() - 1);
+        }
+        return formatted.endsWith(".") ? formatted.substring(0, formatted.length() - 1) : formatted;
+    }
+
     private PotionEffectType parseEffect(String value) {
         String normalized = value.toLowerCase(Locale.ROOT);
         if (!normalized.contains(":")) {
@@ -622,5 +806,39 @@ public final class GuiManager implements Listener {
         }
         NamespacedKey key = NamespacedKey.fromString(normalized);
         return key == null ? null : Registry.EFFECT.get(key);
+    }
+
+    private record SelectorContext(String mobId, int page, String query) {
+        private static SelectorContext parse(String context) {
+            String[] parts = context.split("\\|", -1);
+            String mobId = parts.length > 0 ? parts[0] : "";
+            int page = parts.length > 1 ? parseInt(parts[1], 0) : 0;
+            String query = parts.length > 2 ? parts[2] : "";
+            return new SelectorContext(mobId, page, query);
+        }
+    }
+
+    private record SpawnerEditorContext(String mobId, SpawnerSettings settings) {
+        private static SpawnerEditorContext parse(String context) {
+            String[] parts = context.split("\\|", -1);
+            String mobId = parts.length > 0 ? parts[0] : "";
+            SpawnerSettings defaults = SpawnerSettings.DEFAULT;
+            return new SpawnerEditorContext(mobId, new SpawnerSettings(
+                    parts.length > 1 ? parseInt(parts[1], defaults.spawnCount()) : defaults.spawnCount(),
+                    parts.length > 2 ? parseInt(parts[2], defaults.spawnRange()) : defaults.spawnRange(),
+                    parts.length > 3 ? parseInt(parts[3], defaults.maxNearby()) : defaults.maxNearby(),
+                    parts.length > 4 ? parseInt(parts[4], defaults.delayTicks()) : defaults.delayTicks(),
+                    parts.length > 5 ? parseInt(parts[5], defaults.randomDelayTicks()) : defaults.randomDelayTicks(),
+                    parts.length > 6 ? parseInt(parts[6], defaults.requiredPlayerRange()) : defaults.requiredPlayerRange(),
+                    parts.length > 7 && Boolean.parseBoolean(parts[7])));
+        }
+    }
+
+    private static int parseInt(String value, int fallback) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException exception) {
+            return fallback;
+        }
     }
 }

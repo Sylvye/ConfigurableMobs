@@ -8,7 +8,7 @@ commands:
   configurablemobs:
     description: Opens the ConfigurableMobs editor.
     usage: /<command> [summon|reload]
-    aliases: [cmobs]
+    aliases: [cmobs, cm]
 permissions:
   configurablemobs.admin:
     description: Allows using all ConfigurableMobs editor and admin commands.

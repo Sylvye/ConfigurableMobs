@@ -2,6 +2,7 @@ package com.bountysmp.configurablemobs.spawn;
 
 import com.bountysmp.configurablemobs.data.CustomMobManager;
 import com.bountysmp.configurablemobs.model.CustomMobDefinition;
+import com.bountysmp.configurablemobs.model.SpawnerSettings;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
@@ -15,6 +16,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.CreatureSpawner;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -32,16 +34,17 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
 public final class CustomSpawnerManager implements Listener {
-    private static final int ACTIVATION_RANGE = 16;
-    private static final int NEARBY_LIMIT = 6;
-    private static final int SPAWN_RADIUS = 4;
-    private static final int MIN_DELAY_TICKS = 200;
-    private static final int MAX_DELAY_TICKS = 800;
-
     private final JavaPlugin plugin;
     private final CustomMobManager customMobManager;
     private final NamespacedKey customMobKey;
     private final NamespacedKey customSpawnerKey;
+    private final NamespacedKey spawnCountKey;
+    private final NamespacedKey spawnRangeKey;
+    private final NamespacedKey maxNearbyKey;
+    private final NamespacedKey delayTicksKey;
+    private final NamespacedKey randomDelayTicksKey;
+    private final NamespacedKey requiredPlayerRangeKey;
+    private final NamespacedKey dropWithSilkTouchKey;
     private final File file;
     private final Map<LocationKey, SpawnerState> spawners = new HashMap<>();
     private BukkitTask task;
@@ -55,6 +58,13 @@ public final class CustomSpawnerManager implements Listener {
         this.customMobManager = customMobManager;
         this.customMobKey = customMobKey;
         this.customSpawnerKey = customSpawnerKey;
+        this.spawnCountKey = new NamespacedKey(plugin, "spawner_spawn_count");
+        this.spawnRangeKey = new NamespacedKey(plugin, "spawner_spawn_range");
+        this.maxNearbyKey = new NamespacedKey(plugin, "spawner_max_nearby");
+        this.delayTicksKey = new NamespacedKey(plugin, "spawner_delay_ticks");
+        this.randomDelayTicksKey = new NamespacedKey(plugin, "spawner_random_delay_ticks");
+        this.requiredPlayerRangeKey = new NamespacedKey(plugin, "spawner_required_player_range");
+        this.dropWithSilkTouchKey = new NamespacedKey(plugin, "spawner_drop_with_silk_touch");
         this.file = new File(plugin.getDataFolder(), "spawners.yml");
     }
 
@@ -68,8 +78,9 @@ public final class CustomSpawnerManager implements Listener {
         for (String path : config.getKeys(false)) {
             LocationKey key = LocationKey.parse(path);
             String mobId = config.getString(path + ".mob");
+            SpawnerSettings settings = SpawnerSettings.fromConfig(config.getConfigurationSection(path + ".settings"));
             if (key != null && mobId != null) {
-                spawners.put(key, new SpawnerState(mobId.toLowerCase(Locale.ROOT), nextSpawnTick()));
+                spawners.put(key, new SpawnerState(mobId.toLowerCase(Locale.ROOT), settings, nextSpawnTick(settings)));
             }
         }
     }
@@ -82,6 +93,7 @@ public final class CustomSpawnerManager implements Listener {
         YamlConfiguration config = new YamlConfiguration();
         for (Map.Entry<LocationKey, SpawnerState> entry : spawners.entrySet()) {
             config.set(entry.getKey().path() + ".mob", entry.getValue().mobId());
+            entry.getValue().settings().saveTo(config.createSection(entry.getKey().path() + ".settings"));
         }
         try {
             config.save(file);
@@ -104,11 +116,24 @@ public final class CustomSpawnerManager implements Listener {
     }
 
     public ItemStack createSpawnerItem(CustomMobDefinition definition) {
+        return createSpawnerItem(definition, SpawnerSettings.DEFAULT);
+    }
+
+    public ItemStack createSpawnerItem(CustomMobDefinition definition, SpawnerSettings settings) {
         ItemStack item = new ItemStack(Material.SPAWNER);
         ItemMeta meta = item.getItemMeta();
         meta.setDisplayName("Custom Spawner: " + definition.id());
-        meta.setLore(java.util.List.of("Places a ConfigurableMobs spawner.", "Mob: " + definition.id()));
+        meta.setLore(java.util.List.of(
+                "Mob: " + definition.id(),
+                "Spawn Count: " + settings.spawnCount(),
+                "Spawn Range: " + settings.spawnRange(),
+                "Max Nearby: " + settings.maxNearby(),
+                "Delay: " + settings.delaySeconds() + "s",
+                "Random Delay: 0-" + settings.randomDelaySeconds() + "s",
+                "Required Player Range: " + settings.requiredPlayerRange(),
+                "Silk Touch Drop: " + (settings.dropWithSilkTouch() ? "enabled" : "disabled")));
         meta.getPersistentDataContainer().set(customSpawnerKey, PersistentDataType.STRING, definition.id());
+        writeSettings(meta, settings);
         item.setItemMeta(meta);
         return item;
     }
@@ -130,6 +155,9 @@ public final class CustomSpawnerManager implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onEggUse(PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND || event.getItem() == null) {
+            return;
+        }
+        if (!event.getItem().hasItemMeta()) {
             return;
         }
         String mobId = event.getItem().getItemMeta().getPersistentDataContainer().get(customMobKey, PersistentDataType.STRING);
@@ -163,13 +191,14 @@ public final class CustomSpawnerManager implements Listener {
         if (mobId == null || customMobManager.get(mobId).isEmpty()) {
             return;
         }
+        SpawnerSettings settings = readSettings(item.getItemMeta());
         LocationKey key = LocationKey.from(event.getBlockPlaced().getLocation());
-        spawners.put(key, new SpawnerState(mobId, nextSpawnTick()));
+        spawners.put(key, new SpawnerState(mobId, settings, nextSpawnTick(settings)));
         updateSpawnerBlock(event.getBlockPlaced(), mobId);
         save();
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSpawnerBreak(BlockBreakEvent event) {
         LocationKey key = LocationKey.from(event.getBlock().getLocation());
         SpawnerState removed = spawners.remove(key);
@@ -177,10 +206,10 @@ public final class CustomSpawnerManager implements Listener {
             return;
         }
         save();
+        event.setDropItems(false);
         CustomMobDefinition definition = customMobManager.get(removed.mobId()).orElse(null);
-        if (definition != null) {
-            event.setDropItems(false);
-            event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation(), createSpawnerItem(definition));
+        if (definition != null && removed.settings().dropWithSilkTouch() && hasSilkTouch(event.getPlayer().getInventory().getItemInMainHand())) {
+            event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation(), createSpawnerItem(definition, removed.settings()));
         }
     }
 
@@ -192,36 +221,42 @@ public final class CustomSpawnerManager implements Listener {
             }
             Location location = entry.getKey().toLocation();
             if (location == null || !location.isWorldLoaded() || location.getBlock().getType() != Material.SPAWNER) {
-                entry.getValue().nextSpawnTick(nextSpawnTick());
+                entry.getValue().nextSpawnTick(nextSpawnTick(entry.getValue().settings()));
                 continue;
             }
-            if (!hasNearbyPlayer(location) || nearbyCustomMobCount(location, entry.getValue().mobId()) >= NEARBY_LIMIT) {
-                entry.getValue().nextSpawnTick(nextSpawnTick());
+            SpawnerSettings settings = entry.getValue().settings();
+            if (!hasNearbyPlayer(location, settings.requiredPlayerRange())
+                    || nearbyCustomMobCount(location, entry.getValue().mobId(), settings.spawnRange()) >= settings.maxNearby()) {
+                entry.getValue().nextSpawnTick(nextSpawnTick(settings));
                 continue;
             }
             CustomMobDefinition definition = customMobManager.get(entry.getValue().mobId()).orElse(null);
             if (definition == null) {
-                entry.getValue().nextSpawnTick(nextSpawnTick());
+                entry.getValue().nextSpawnTick(nextSpawnTick(settings));
                 continue;
             }
-            Location spawnLocation = randomSpawnLocation(location);
-            definition.spawn(spawnLocation, customMobKey);
-            entry.getValue().nextSpawnTick(nextSpawnTick());
+            int nearbyCount = nearbyCustomMobCount(location, entry.getValue().mobId(), settings.spawnRange());
+            int spawnCount = Math.min(settings.spawnCount(), settings.maxNearby() - nearbyCount);
+            for (int count = 0; count < spawnCount; count++) {
+                Location spawnLocation = randomSpawnLocation(location, settings.spawnRange());
+                definition.spawn(spawnLocation, customMobKey);
+            }
+            entry.getValue().nextSpawnTick(nextSpawnTick(settings));
         }
     }
 
-    private boolean hasNearbyPlayer(Location location) {
+    private boolean hasNearbyPlayer(Location location, int requiredPlayerRange) {
         for (Player player : location.getWorld().getPlayers()) {
-            if (player.getLocation().distanceSquared(location) <= ACTIVATION_RANGE * ACTIVATION_RANGE) {
+            if (player.getLocation().distanceSquared(location) <= requiredPlayerRange * requiredPlayerRange) {
                 return true;
             }
         }
         return false;
     }
 
-    private int nearbyCustomMobCount(Location location, String mobId) {
+    private int nearbyCustomMobCount(Location location, String mobId, int spawnRange) {
         int count = 0;
-        for (Entity entity : location.getWorld().getNearbyEntities(location, ACTIVATION_RANGE, ACTIVATION_RANGE, ACTIVATION_RANGE)) {
+        for (Entity entity : location.getWorld().getNearbyEntities(location, spawnRange, spawnRange, spawnRange)) {
             if (entity instanceof LivingEntity livingEntity) {
                 String id = livingEntity.getPersistentDataContainer().get(customMobKey, PersistentDataType.STRING);
                 if (mobId.equals(id)) {
@@ -232,12 +267,12 @@ public final class CustomSpawnerManager implements Listener {
         return count;
     }
 
-    private Location randomSpawnLocation(Location spawnerLocation) {
+    private Location randomSpawnLocation(Location spawnerLocation, int spawnRange) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
         return spawnerLocation.clone().add(
-                random.nextInt(-SPAWN_RADIUS, SPAWN_RADIUS + 1) + 0.5D,
+                random.nextInt(-spawnRange, spawnRange + 1) + 0.5D,
                 0.0D,
-                random.nextInt(-SPAWN_RADIUS, SPAWN_RADIUS + 1) + 0.5D);
+                random.nextInt(-spawnRange, spawnRange + 1) + 0.5D);
     }
 
     private void updateSpawnerBlock(Block block, String mobId) {
@@ -249,21 +284,59 @@ public final class CustomSpawnerManager implements Listener {
         spawner.update(true);
     }
 
-    private long nextSpawnTick() {
-        return Bukkit.getCurrentTick() + ThreadLocalRandom.current().nextInt(MIN_DELAY_TICKS, MAX_DELAY_TICKS + 1);
+    private long nextSpawnTick(SpawnerSettings settings) {
+        int extraDelay = settings.randomDelayTicks() <= 0
+                ? 0
+                : ThreadLocalRandom.current().nextInt(settings.randomDelayTicks() + 1);
+        return Bukkit.getCurrentTick() + settings.delayTicks() + extraDelay;
+    }
+
+    private void writeSettings(ItemMeta meta, SpawnerSettings settings) {
+        meta.getPersistentDataContainer().set(spawnCountKey, PersistentDataType.INTEGER, settings.spawnCount());
+        meta.getPersistentDataContainer().set(spawnRangeKey, PersistentDataType.INTEGER, settings.spawnRange());
+        meta.getPersistentDataContainer().set(maxNearbyKey, PersistentDataType.INTEGER, settings.maxNearby());
+        meta.getPersistentDataContainer().set(delayTicksKey, PersistentDataType.INTEGER, settings.delayTicks());
+        meta.getPersistentDataContainer().set(randomDelayTicksKey, PersistentDataType.INTEGER, settings.randomDelayTicks());
+        meta.getPersistentDataContainer().set(requiredPlayerRangeKey, PersistentDataType.INTEGER, settings.requiredPlayerRange());
+        meta.getPersistentDataContainer().set(dropWithSilkTouchKey, PersistentDataType.BYTE, (byte) (settings.dropWithSilkTouch() ? 1 : 0));
+    }
+
+    private SpawnerSettings readSettings(ItemMeta meta) {
+        return new SpawnerSettings(
+                getInt(meta, spawnCountKey, SpawnerSettings.DEFAULT.spawnCount()),
+                getInt(meta, spawnRangeKey, SpawnerSettings.DEFAULT.spawnRange()),
+                getInt(meta, maxNearbyKey, SpawnerSettings.DEFAULT.maxNearby()),
+                getInt(meta, delayTicksKey, SpawnerSettings.DEFAULT.delayTicks()),
+                getInt(meta, randomDelayTicksKey, SpawnerSettings.DEFAULT.randomDelayTicks()),
+                getInt(meta, requiredPlayerRangeKey, SpawnerSettings.DEFAULT.requiredPlayerRange()),
+                meta.getPersistentDataContainer().getOrDefault(dropWithSilkTouchKey, PersistentDataType.BYTE, (byte) 0) == 1);
+    }
+
+    private int getInt(ItemMeta meta, NamespacedKey key, int fallback) {
+        return meta.getPersistentDataContainer().getOrDefault(key, PersistentDataType.INTEGER, fallback);
+    }
+
+    private boolean hasSilkTouch(ItemStack item) {
+        return item != null && item.containsEnchantment(Enchantment.SILK_TOUCH);
     }
 
     private static final class SpawnerState {
         private final String mobId;
+        private final SpawnerSettings settings;
         private long nextSpawnTick;
 
-        private SpawnerState(String mobId, long nextSpawnTick) {
+        private SpawnerState(String mobId, SpawnerSettings settings, long nextSpawnTick) {
             this.mobId = mobId;
+            this.settings = settings;
             this.nextSpawnTick = nextSpawnTick;
         }
 
         private String mobId() {
             return mobId;
+        }
+
+        private SpawnerSettings settings() {
+            return settings;
         }
 
         private long nextSpawnTick() {
