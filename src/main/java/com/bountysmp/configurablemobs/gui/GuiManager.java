@@ -31,7 +31,6 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
@@ -73,9 +72,9 @@ public final class GuiManager implements Listener {
 
     public void openMain(Player player) {
         Inventory inventory = create(MenuType.MAIN, "", "ConfigurableMobs", 27);
-        inventory.setItem(11, item(Material.ZOMBIE_HEAD, "Custom Mobs", List.of("Create and edit custom mobs.")));
-        inventory.setItem(13, item(Material.GRASS_BLOCK, "Spawn Rules", List.of("Control natural spawns and replacements.")));
-        inventory.setItem(15, item(Material.SPAWNER, "Tools", List.of("Generate custom eggs and spawners.")));
+        inventory.setItem(11, item(Material.ZOMBIE_HEAD, GuiUtil.Tone.INFO, "Custom Mobs", List.of("Create and edit custom mobs.")));
+        inventory.setItem(13, item(Material.GRASS_BLOCK, GuiUtil.Tone.INFO, "Spawn Rules", List.of("Control natural spawns and replacements.")));
+        inventory.setItem(15, item(Material.SPAWNER, GuiUtil.Tone.INFO, "Tools", List.of("Generate custom eggs and spawners.")));
         player.openInventory(inventory);
     }
 
@@ -127,12 +126,12 @@ public final class GuiManager implements Listener {
             if (slot >= 45) {
                 break;
             }
-            inventory.setItem(slot++, item(eggMaterial(definition.baseType()),
+            inventory.setItem(slot++, item(eggMaterial(definition.baseType()), GuiUtil.Tone.INFO,
                     definition.id(),
                     List.of("Base: " + definition.baseType().name(), "Click to edit.")));
         }
-        inventory.setItem(49, item(Material.EMERALD, "Create Mob", List.of("Enter a new mob id.")));
-        inventory.setItem(45, item(Material.ARROW, "Back", List.of()));
+        inventory.setItem(49, item(Material.LIME_CONCRETE, GuiUtil.Tone.SUCCESS, "Create Mob", List.of("Enter a new mob id.")));
+        inventory.setItem(45, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
         player.openInventory(inventory);
     }
 
@@ -172,14 +171,14 @@ public final class GuiManager implements Listener {
             return;
         }
         Inventory inventory = create(MenuType.MOB_EDITOR, mobId, "Mob: " + mobId, 54);
-        inventory.setItem(10, item(eggMaterial(definition.baseType()), "Base Mob", List.of(definition.baseType().name(), "Click to choose.")));
-        inventory.setItem(12, item(Material.NAME_TAG, "Display Name", List.of(definition.displayName(), "Click to edit.")));
-        inventory.setItem(14, item(Material.IRON_CHESTPLATE, "Equipment", List.of("Edit starting gear.")));
-        inventory.setItem(16, item(Material.POTION, "Potion Effects", List.of(definition.potionEffects().size() + " effects.")));
-        inventory.setItem(29, item(Material.OAK_SIGN, "Scoreboard Tags", List.of(definition.scoreboardTags().size() + " tags.")));
-        inventory.setItem(31, item(Material.ANVIL, "Attributes", List.of(definition.attributes().size() + " overrides.")));
-        inventory.setItem(33, item(Material.ENDER_PEARL, "Test Summon", List.of("Summons at your location.")));
-        inventory.setItem(49, item(Material.ARROW, "Back", List.of()));
+        inventory.setItem(10, item(eggMaterial(definition.baseType()), GuiUtil.Tone.WARNING, "Base Mob", List.of(definition.baseType().name(), "Click to choose.")));
+        inventory.setItem(12, item(Material.NAME_TAG, GuiUtil.Tone.WARNING, "Display Name", List.of(definition.displayName(), "Click to edit.")));
+        inventory.setItem(14, item(Material.IRON_CHESTPLATE, GuiUtil.Tone.INFO, "Equipment", List.of("Edit starting gear.")));
+        inventory.setItem(16, item(Material.POTION, GuiUtil.Tone.INFO, "Potion Effects", List.of(definition.potionEffects().size() + " effects.")));
+        inventory.setItem(29, item(Material.OAK_SIGN, GuiUtil.Tone.INFO, "Scoreboard Tags", List.of(definition.scoreboardTags().size() + " tags.")));
+        inventory.setItem(31, item(Material.ANVIL, GuiUtil.Tone.INFO, "Attributes", List.of(definition.attributes().size() + " overrides.")));
+        inventory.setItem(33, item(Material.ENDER_PEARL, GuiUtil.Tone.SUCCESS, "Test Summon", List.of("Summons at your location.")));
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
         player.openInventory(inventory);
     }
 
@@ -221,12 +220,12 @@ public final class GuiManager implements Listener {
         int start = safePage * 45;
         for (int index = 0; index < 45 && start + index < filtered.size(); index++) {
             EntityType type = filtered.get(start + index);
-            inventory.setItem(index, item(eggMaterial(type), type.name(), List.of("Click to select.")));
+            inventory.setItem(index, item(eggMaterial(type), GuiUtil.Tone.INFO, type.name(), List.of("Click to select.")));
         }
-        inventory.setItem(45, item(Material.ARROW, "Previous Page", List.of("Page " + (safePage + 1) + " of " + (maxPage + 1))));
-        inventory.setItem(48, item(Material.BARRIER, "Back", List.of()));
-        inventory.setItem(49, item(Material.COMPASS, "Search", List.of(query.isBlank() ? "No filter." : "Filter: " + query)));
-        inventory.setItem(53, item(Material.ARROW, "Next Page", List.of("Page " + (safePage + 1) + " of " + (maxPage + 1))));
+        inventory.setItem(45, item(Material.ARROW, GuiUtil.Tone.WARNING, "Previous Page", List.of("Page " + (safePage + 1) + " of " + (maxPage + 1))));
+        inventory.setItem(48, item(Material.BARRIER, GuiUtil.Tone.DANGER, "Back", List.of()));
+        inventory.setItem(49, item(Material.COMPASS, GuiUtil.Tone.WARNING, "Search", List.of(query.isBlank() ? "No filter." : "Filter: " + query)));
+        inventory.setItem(53, item(Material.ARROW, GuiUtil.Tone.WARNING, "Next Page", List.of("Page " + (safePage + 1) + " of " + (maxPage + 1))));
         player.openInventory(inventory);
     }
 
@@ -278,8 +277,8 @@ public final class GuiManager implements Listener {
         setEquipmentButton(inventory, definition, 19, EquipmentSlot.CHEST, "Chestplate");
         setEquipmentButton(inventory, definition, 21, EquipmentSlot.LEGS, "Leggings");
         setEquipmentButton(inventory, definition, 23, EquipmentSlot.FEET, "Boots");
-        inventory.setItem(40, item(Material.ARMOR_STAND, "Copy Your Equipment", List.of("Copies your worn and held items.")));
-        inventory.setItem(49, item(Material.ARROW, "Back", List.of()));
+        inventory.setItem(40, item(Material.ARMOR_STAND, GuiUtil.Tone.SUCCESS, "Copy Your Equipment", List.of("Copies your worn and held items.")));
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
         player.openInventory(inventory);
     }
 
@@ -334,11 +333,11 @@ public final class GuiManager implements Listener {
         Inventory inventory = create(MenuType.EFFECTS, mobId, "Effects: " + mobId, 54);
         for (int slot = 0; slot < Math.min(45, definition.potionEffects().size()); slot++) {
             PotionEffect effect = definition.potionEffects().get(slot);
-            inventory.setItem(slot, item(Material.POTION, effect.getType().getKey().asString(),
+            inventory.setItem(slot, item(Material.POTION, GuiUtil.Tone.INFO, effect.getType().getKey().asString(),
                     List.of("Duration: " + effect.getDuration() / 20 + "s", "Amplifier: " + effect.getAmplifier(), "Click to remove.")));
         }
-        inventory.setItem(49, item(Material.ARROW, "Back", List.of()));
-        inventory.setItem(53, item(Material.EMERALD, "Add Effect", List.of("Format: effect seconds amplifier")));
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
+        inventory.setItem(53, item(Material.LIME_CONCRETE, GuiUtil.Tone.SUCCESS, "Add Effect", List.of("Format: effect seconds amplifier")));
         player.openInventory(inventory);
     }
 
@@ -393,10 +392,10 @@ public final class GuiManager implements Listener {
             if (slot >= 45) {
                 break;
             }
-            inventory.setItem(slot++, item(Material.NAME_TAG, tag, List.of("Click to remove.")));
+            inventory.setItem(slot++, item(Material.NAME_TAG, GuiUtil.Tone.INFO, tag, List.of("Click to remove.")));
         }
-        inventory.setItem(49, item(Material.ARROW, "Back", List.of()));
-        inventory.setItem(53, item(Material.EMERALD, "Add Tag", List.of("Enter a scoreboard tag.")));
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
+        inventory.setItem(53, item(Material.LIME_CONCRETE, GuiUtil.Tone.SUCCESS, "Add Tag", List.of("Enter a scoreboard tag.")));
         player.openInventory(inventory);
     }
 
@@ -440,17 +439,17 @@ public final class GuiManager implements Listener {
             if (attribute != null) {
                 Double value = definition.attributes().get(attribute);
                 String defaultText = defaultAttributeText(definition.baseType(), attribute);
-                inventory.setItem(slot, item(Material.ANVIL, COMMON_ATTRIBUTES.get(slot),
+                inventory.setItem(slot, item(Material.ANVIL, GuiUtil.Tone.WARNING, COMMON_ATTRIBUTES.get(slot),
                         List.of("Value: " + (value == null ? "default (" + defaultText + ")" : value),
                                 "Left click to set.",
                                 "Right click to reset to default.")));
                 if (value != null) {
-                    inventory.setItem(slot + 27, item(Material.BARRIER, "Reset " + COMMON_ATTRIBUTES.get(slot),
+                    inventory.setItem(slot + 27, item(Material.BARRIER, GuiUtil.Tone.DANGER, "Reset " + COMMON_ATTRIBUTES.get(slot),
                             List.of("Current: " + value, "Default: " + defaultText, "Click to reset.")));
                 }
             }
         }
-        inventory.setItem(49, item(Material.ARROW, "Back", List.of()));
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
         player.openInventory(inventory);
     }
 
@@ -504,9 +503,9 @@ public final class GuiManager implements Listener {
             if (slot >= 45) {
                 break;
             }
-            inventory.setItem(slot++, item(Material.SPAWNER, definition.id(), List.of("Left click: spawn egg.", "Right click: spawner.")));
+            inventory.setItem(slot++, item(Material.SPAWNER, GuiUtil.Tone.INFO, definition.id(), List.of("Left click: spawn egg.", "Right click: spawner.")));
         }
-        inventory.setItem(49, item(Material.ARROW, "Back", List.of()));
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
         player.openInventory(inventory);
     }
 
@@ -533,17 +532,18 @@ public final class GuiManager implements Listener {
             return;
         }
         Inventory inventory = create(MenuType.SPAWNER_EDITOR, spawnerContext(mobId, settings), "Spawner: " + mobId, 54);
-        inventory.setItem(10, item(Material.EGG, "Spawn Count", List.of(String.valueOf(settings.spawnCount()), "Click to edit.")));
-        inventory.setItem(11, item(Material.COMPASS, "Spawn Range", List.of(String.valueOf(settings.spawnRange()), "Click to edit.")));
-        inventory.setItem(12, item(Material.ZOMBIE_HEAD, "Max Nearby", List.of(String.valueOf(settings.maxNearby()), "Click to edit.")));
-        inventory.setItem(13, item(Material.CLOCK, "Delay", List.of(settings.delaySeconds() + " seconds", "Click to edit.")));
-        inventory.setItem(14, item(Material.REPEATER, "Random Delay Range", List.of("0-" + settings.randomDelaySeconds() + " seconds", "Click to edit.")));
-        inventory.setItem(15, item(Material.PLAYER_HEAD, "Required Player Range", List.of(String.valueOf(settings.requiredPlayerRange()), "Click to edit.")));
+        inventory.setItem(10, item(Material.EGG, GuiUtil.Tone.WARNING, "Spawn Count", List.of(String.valueOf(settings.spawnCount()), "Click to edit.")));
+        inventory.setItem(11, item(Material.COMPASS, GuiUtil.Tone.WARNING, "Spawn Range", List.of(String.valueOf(settings.spawnRange()), "Click to edit.")));
+        inventory.setItem(12, item(Material.ZOMBIE_HEAD, GuiUtil.Tone.WARNING, "Max Nearby", List.of(String.valueOf(settings.maxNearby()), "Click to edit.")));
+        inventory.setItem(13, item(Material.CLOCK, GuiUtil.Tone.WARNING, "Delay", List.of(settings.delaySeconds() + " seconds", "Click to edit.")));
+        inventory.setItem(14, item(Material.REPEATER, GuiUtil.Tone.WARNING, "Random Delay Range", List.of("0-" + settings.randomDelaySeconds() + " seconds", "Click to edit.")));
+        inventory.setItem(15, item(Material.PLAYER_HEAD, GuiUtil.Tone.WARNING, "Required Player Range", List.of(String.valueOf(settings.requiredPlayerRange()), "Click to edit.")));
         inventory.setItem(16, item(settings.dropWithSilkTouch() ? Material.LIME_DYE : Material.GRAY_DYE,
+                settings.dropWithSilkTouch() ? GuiUtil.Tone.SUCCESS : GuiUtil.Tone.MUTED,
                 "Silk Touch Drop: " + (settings.dropWithSilkTouch() ? "Enabled" : "Disabled"),
                 List.of("Click to toggle.", "Default: disabled.")));
-        inventory.setItem(31, item(Material.SPAWNER, "Generate Spawner", List.of("Adds the configured spawner item.")));
-        inventory.setItem(49, item(Material.ARROW, "Back", List.of()));
+        inventory.setItem(31, item(Material.SPAWNER, GuiUtil.Tone.SUCCESS, "Generate Spawner", List.of("Adds the configured spawner item.")));
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
         player.openInventory(inventory);
     }
 
@@ -588,9 +588,9 @@ public final class GuiManager implements Listener {
             if (slot >= 45) {
                 break;
             }
-            inventory.setItem(slot++, item(Material.GRASS_BLOCK, world.getName(), List.of("Click to edit world rules.")));
+            inventory.setItem(slot++, item(Material.GRASS_BLOCK, GuiUtil.Tone.INFO, world.getName(), List.of("Click to edit world rules.")));
         }
-        inventory.setItem(49, item(Material.ARROW, "Back", List.of()));
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
         player.openInventory(inventory);
     }
 
@@ -608,9 +608,9 @@ public final class GuiManager implements Listener {
         Inventory inventory = create(MenuType.SPAWN_MOBS, worldName, "Spawn Mobs: " + worldName, 54);
         for (int slot = 0; slot < Math.min(45, MOB_TYPES.size()); slot++) {
             EntityType type = MOB_TYPES.get(slot);
-            inventory.setItem(slot, item(Material.EGG, type.name(), List.of("Click to configure.")));
+            inventory.setItem(slot, item(eggMaterial(type), GuiUtil.Tone.INFO, type.name(), List.of("Click to configure.")));
         }
-        inventory.setItem(49, item(Material.ARROW, "Back", List.of()));
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
         player.openInventory(inventory);
     }
 
@@ -633,15 +633,16 @@ public final class GuiManager implements Listener {
         WorldMobRule rule = spawnRuleManager.getOrCreate(world, type);
         Inventory inventory = create(MenuType.SPAWN_RULE, worldName + "|" + type.name(), "Rule: " + type.name(), 54);
         inventory.setItem(11, item(rule.vanillaEnabled() ? Material.LIME_DYE : Material.RED_DYE,
+                rule.vanillaEnabled() ? GuiUtil.Tone.SUCCESS : GuiUtil.Tone.DANGER,
                 "Vanilla Spawn: " + (rule.vanillaEnabled() ? "Enabled" : "Disabled"),
                 List.of("Click to toggle.")));
-        inventory.setItem(15, item(Material.EMERALD, "Add Replacement", List.of("Format: mobId chance weight")));
+        inventory.setItem(15, item(Material.LIME_CONCRETE, GuiUtil.Tone.SUCCESS, "Add Replacement", List.of("Format: mobId chance weight")));
         for (int index = 0; index < Math.min(18, rule.replacements().size()); index++) {
             ReplacementRule replacement = rule.replacements().get(index);
-            inventory.setItem(27 + index, item(Material.ZOMBIE_HEAD, replacement.mobId(),
+            inventory.setItem(27 + index, item(Material.ZOMBIE_HEAD, GuiUtil.Tone.INFO, replacement.mobId(),
                     List.of("Chance: " + replacement.chance(), "Weight: " + replacement.weight(), "Click to remove.")));
         }
-        inventory.setItem(49, item(Material.ARROW, "Back", List.of()));
+        inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
         player.openInventory(inventory);
     }
 
@@ -688,33 +689,30 @@ public final class GuiManager implements Listener {
 
     private Inventory create(MenuType type, String context, String title, int size) {
         MenuHolder holder = new MenuHolder(type, context);
-        Inventory inventory = Bukkit.createInventory(holder, size, title);
+        Inventory inventory = Bukkit.createInventory(holder, size, GuiUtil.title(title));
         holder.inventory(inventory);
+        fill(inventory);
         return inventory;
     }
 
-    private ItemStack item(Material material, String name, List<String> lore) {
-        ItemStack item = new ItemStack(material == null ? Material.STONE : material);
-        ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName(ChatColor.RESET + name);
-        if (!lore.isEmpty()) {
-            meta.setLore(lore);
-        }
-        item.setItemMeta(meta);
-        return item;
+    private ItemStack item(Material material, GuiUtil.Tone tone, String name, List<String> lore) {
+        return GuiUtil.item(material, tone, name, lore);
     }
 
     private void setEquipmentButton(Inventory inventory, CustomMobDefinition definition, int slot, EquipmentSlot equipmentSlot, String label) {
         ItemStack current = definition.equipment().get(equipmentSlot);
         if (current == null || current.getType().isAir()) {
-            inventory.setItem(slot, item(Material.BARRIER, label, List.of("Cursor item sets this slot.", "Empty cursor clears it.")));
+            inventory.setItem(slot, item(Material.BARRIER, GuiUtil.Tone.MUTED, label, List.of("Cursor item sets this slot.", "Empty cursor clears it.")));
             return;
         }
-        ItemStack display = current.clone();
-        ItemMeta meta = display.getItemMeta();
-        meta.setDisplayName(ChatColor.RESET + label);
-        display.setItemMeta(meta);
-        inventory.setItem(slot, display);
+        inventory.setItem(slot, GuiUtil.namedClone(current, GuiUtil.Tone.INFO, label, List.of("Cursor item replaces this slot.", "Empty cursor clears it.")));
+    }
+
+    private void fill(Inventory inventory) {
+        ItemStack filler = GuiUtil.filler();
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            inventory.setItem(slot, filler);
+        }
     }
 
     private void copyEquipment(CustomMobDefinition definition, EquipmentSlot slot, ItemStack item) {
