@@ -6,10 +6,15 @@ import com.bountysmp.configurablemobs.model.SpawnerSettings;
 import com.bountysmp.configurablemobs.trigger.TriggerManager;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -28,6 +33,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -126,8 +132,8 @@ public final class CustomSpawnerManager implements Listener {
     public ItemStack createSpawnerItem(CustomMobDefinition definition, SpawnerSettings settings) {
         ItemStack item = new ItemStack(Material.SPAWNER);
         ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName("Custom Spawner: " + definition.id());
-        meta.setLore(java.util.List.of(
+        meta.displayName(name("Custom Spawner: " + definition.id()));
+        meta.lore(lore(List.of(
                 "Mob: " + definition.id(),
                 "Spawn Count: " + settings.spawnCount(),
                 "Spawn Range: " + settings.spawnRange(),
@@ -135,7 +141,8 @@ public final class CustomSpawnerManager implements Listener {
                 "Delay: " + settings.delaySeconds() + "s",
                 "Random Delay: 0-" + settings.randomDelaySeconds() + "s",
                 "Required Player Range: " + settings.requiredPlayerRange(),
-                "Silk Touch Drop: " + (settings.dropWithSilkTouch() ? "enabled" : "disabled")));
+                "Silk Touch Drop: " + (settings.dropWithSilkTouch() ? "enabled" : "disabled"))));
+        meta.addItemFlags(ItemFlag.values());
         meta.getPersistentDataContainer().set(customSpawnerKey, PersistentDataType.STRING, definition.id());
         writeSettings(meta, settings);
         item.setItemMeta(meta);
@@ -149,8 +156,9 @@ public final class CustomSpawnerManager implements Listener {
         }
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName("Custom Egg: " + definition.id());
-        meta.setLore(java.util.List.of("Spawns custom mob: " + definition.id()));
+        meta.displayName(name("Custom Egg: " + definition.id()));
+        meta.lore(lore(List.of("Spawns custom mob: " + definition.id())));
+        meta.addItemFlags(ItemFlag.values());
         meta.getPersistentDataContainer().set(customMobKey, PersistentDataType.STRING, definition.id());
         item.setItemMeta(meta);
         return item;
@@ -324,6 +332,18 @@ public final class CustomSpawnerManager implements Listener {
 
     private boolean hasSilkTouch(ItemStack item) {
         return item != null && item.containsEnchantment(Enchantment.SILK_TOUCH);
+    }
+
+    private Component name(String value) {
+        return Component.text(value, NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false);
+    }
+
+    private List<Component> lore(List<String> lines) {
+        List<Component> components = new ArrayList<>(lines.size());
+        for (String line : lines) {
+            components.add(Component.text(line, NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        }
+        return components;
     }
 
     private static final class SpawnerState {

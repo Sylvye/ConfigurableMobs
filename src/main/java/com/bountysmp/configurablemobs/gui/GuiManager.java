@@ -184,18 +184,18 @@ public final class GuiManager implements Listener {
         Inventory inventory = create(MenuType.MOB_EDITOR, mobId, "Mob: " + mobId, 54);
         inventory.setItem(10, item(eggMaterial(definition.baseType()), GuiUtil.Tone.WARNING, "Base Mob", List.of(definition.baseType().name(), "Click to choose.")));
         inventory.setItem(12, item(Material.NAME_TAG, GuiUtil.Tone.WARNING, "Display Name", List.of(definition.displayName(), "Click to edit.")));
-        inventory.setItem(14, item(Material.IRON_CHESTPLATE, GuiUtil.Tone.INFO, "Equipment", List.of("Edit starting gear.")));
-        inventory.setItem(16, item(Material.POTION, GuiUtil.Tone.INFO, "Potion Effects", List.of(definition.potionEffects().size() + " effects.")));
-        inventory.setItem(22, item(Material.COMPARATOR, GuiUtil.Tone.INFO, "Rules",
+        inventory.setItem(14, item(Material.COMPARATOR, GuiUtil.Tone.INFO, "Rules",
                 List.of("Never despawns: " + enabledText(definition.neverDespawns()),
                         "Silent: " + enabledText(definition.silent()),
                         "Name always visible: " + enabledText(definition.nameAlwaysVisible()),
                         "Can pick up loot: " + enabledText(definition.canPickUpLoot()),
                         "Invincible: " + enabledText(definition.invincible()))));
-        inventory.setItem(29, item(Material.OAK_SIGN, GuiUtil.Tone.INFO, "Scoreboard Tags", List.of(definition.scoreboardTags().size() + " tags.")));
-        inventory.setItem(31, item(Material.ANVIL, GuiUtil.Tone.INFO, "Attributes", List.of(definition.attributes().size() + " overrides.")));
-        inventory.setItem(33, item(Material.ENDER_PEARL, GuiUtil.Tone.SUCCESS, "Test Summon", List.of("Summons at your location.")));
-        inventory.setItem(35, item(Material.COMMAND_BLOCK, GuiUtil.Tone.INFO, "Triggers", List.of(definition.triggers().size() + " triggers.", "Custom mob behavior.")));
+        inventory.setItem(16, item(Material.ANVIL, GuiUtil.Tone.INFO, "Attributes", List.of(definition.attributes().size() + " overrides.")));
+        inventory.setItem(22, item(Material.ENDER_PEARL, GuiUtil.Tone.SUCCESS, "Test Summon", List.of("Summons at your location.")));
+        inventory.setItem(28, item(Material.IRON_CHESTPLATE, GuiUtil.Tone.INFO, "Equipment", List.of("Edit starting gear.")));
+        inventory.setItem(30, item(Material.POTION, GuiUtil.Tone.INFO, "Potion Effects", List.of(definition.potionEffects().size() + " effects.")));
+        inventory.setItem(32, item(Material.OAK_SIGN, GuiUtil.Tone.INFO, "Scoreboard Tags", List.of(definition.scoreboardTags().size() + " tags.")));
+        inventory.setItem(34, item(Material.COMMAND_BLOCK, GuiUtil.Tone.INFO, "Triggers", List.of(definition.triggers().size() + " triggers.", "Custom mob behavior.")));
         inventory.setItem(49, item(Material.ARROW, GuiUtil.Tone.WARNING, "Back", List.of()));
         player.openInventory(inventory);
     }
@@ -215,20 +215,20 @@ public final class GuiManager implements Listener {
                 openMobEditor(player, mobId);
             });
         } else if (slot == 14) {
-            openEquipment(player, mobId);
-        } else if (slot == 16) {
-            openEffects(player, mobId);
-        } else if (slot == 22) {
             openRules(player, mobId);
-        } else if (slot == 29) {
-            openTags(player, mobId);
-        } else if (slot == 31) {
+        } else if (slot == 16) {
             openAttributes(player, mobId);
-        } else if (slot == 33) {
+        } else if (slot == 22) {
             Entity entity = definition.spawn(player.getLocation(), plugin.customMobKey());
             triggerManager.fireSpawn(entity);
             player.sendMessage("Summoned " + mobId + ".");
-        } else if (slot == 35) {
+        } else if (slot == 28) {
+            openEquipment(player, mobId);
+        } else if (slot == 30) {
+            openEffects(player, mobId);
+        } else if (slot == 32) {
+            openTags(player, mobId);
+        } else if (slot == 34) {
             openTriggers(player, mobId);
         } else if (slot == 49) {
             openMobList(player);
@@ -688,7 +688,7 @@ public final class GuiManager implements Listener {
             Attribute attribute = CustomMobDefinition.parseAttribute(COMMON_ATTRIBUTES.get(slot));
             if (attribute != null) {
                 Double value = definition.attributes().get(attribute);
-                String defaultText = defaultAttributeText(definition.baseType(), attribute);
+                String defaultText = defaultAttributeText(definition, attribute);
                 inventory.setItem(slot, item(Material.ANVIL, GuiUtil.Tone.WARNING, COMMON_ATTRIBUTES.get(slot),
                         List.of("Value: " + (value == null ? "default (" + defaultText + ")" : value),
                                 "Left click to set.",
@@ -1069,7 +1069,8 @@ public final class GuiManager implements Listener {
         });
     }
 
-    private String defaultAttributeText(EntityType type, Attribute attribute) {
+    private String defaultAttributeText(CustomMobDefinition definition, Attribute attribute) {
+        EntityType type = definition.baseType();
         if (!type.hasDefaultAttributes()) {
             return "unavailable";
         }
