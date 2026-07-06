@@ -56,6 +56,7 @@ public final class CustomSpawnerManager implements Listener {
     private final File file;
     private final Map<LocationKey, SpawnerState> spawners = new HashMap<>();
     private BukkitTask task;
+    private BukkitTask pendingSave;
 
     public CustomSpawnerManager(
             JavaPlugin plugin,
@@ -81,7 +82,7 @@ public final class CustomSpawnerManager implements Listener {
     public void load() {
         spawners.clear();
         if (!file.exists()) {
-            save();
+            saveNow();
             return;
         }
         YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
@@ -96,6 +97,16 @@ public final class CustomSpawnerManager implements Listener {
     }
 
     public void save() {
+        if (pendingSave != null) {
+            return;
+        }
+        pendingSave = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            pendingSave = null;
+            saveNow();
+        }, 20L);
+    }
+
+    private void saveNow() {
         if (!plugin.getDataFolder().exists() && !plugin.getDataFolder().mkdirs()) {
             plugin.getLogger().warning("Could not create plugin data folder.");
             return;
@@ -122,7 +133,11 @@ public final class CustomSpawnerManager implements Listener {
             task.cancel();
             task = null;
         }
-        save();
+        if (pendingSave != null) {
+            pendingSave.cancel();
+            pendingSave = null;
+        }
+        saveNow();
     }
 
     public ItemStack createSpawnerItem(CustomMobDefinition definition) {

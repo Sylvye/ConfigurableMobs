@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.command.BlockCommandSender;
@@ -43,7 +44,7 @@ public final class ConfigurableMobsCommand implements CommandExecutor, TabComple
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("configurablemobs.admin")) {
-            sender.sendMessage("You do not have permission to use ConfigurableMobs.");
+            sender.sendMessage(ChatColor.RED + "You do not have permission to use ConfigurableMobs.");
             return true;
         }
 

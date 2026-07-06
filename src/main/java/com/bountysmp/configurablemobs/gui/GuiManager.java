@@ -885,7 +885,7 @@ public final class GuiManager implements Listener {
         inventory.setItem(11, item(rule.vanillaEnabled() ? Material.LIME_DYE : Material.RED_DYE,
                 rule.vanillaEnabled() ? GuiUtil.Tone.SUCCESS : GuiUtil.Tone.DANGER,
                 "Vanilla Spawn: " + (rule.vanillaEnabled() ? "Enabled" : "Disabled"),
-                List.of("Click to toggle.")));
+                List.of("Disabled suppresses this natural spawn entirely.", "Click to toggle.")));
         inventory.setItem(15, item(Material.LIME_CONCRETE, GuiUtil.Tone.SUCCESS, "Add Replacement", List.of("Format: mobId chance weight")));
         for (int index = 0; index < Math.min(18, rule.replacements().size()); index++) {
             ReplacementRule replacement = rule.replacements().get(index);

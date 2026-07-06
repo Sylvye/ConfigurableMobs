@@ -5,6 +5,7 @@ import com.bountysmp.configurablemobs.model.CustomMobDefinition;
 import com.bountysmp.configurablemobs.model.MobTrigger;
 import com.bountysmp.configurablemobs.model.TriggerType;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -36,6 +37,7 @@ public final class TriggerManager implements Listener {
     private final CustomMobManager customMobManager;
     private final NamespacedKey customMobKey;
     private final Set<UUID> damageTriggeredDeaths = new HashSet<>();
+    private final Set<UUID> trackedCustomMobs = new HashSet<>();
     private BukkitTask stepTask;
 
     public TriggerManager(JavaPlugin plugin, CustomMobManager customMobManager, NamespacedKey customMobKey) {
@@ -46,6 +48,7 @@ public final class TriggerManager implements Listener {
 
     public void start() {
         stop();
+        scanExistingCustomMobs();
         stepTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickSteps, 1L, 1L);
     }
 
@@ -54,10 +57,12 @@ public final class TriggerManager implements Listener {
             stepTask.cancel();
             stepTask = null;
         }
+        trackedCustomMobs.clear();
     }
 
     public void fireSpawn(Entity entity) {
         if (entity instanceof LivingEntity livingEntity) {
+            trackIfCustom(livingEntity);
             runTriggers(livingEntity, TriggerType.ON_SPAWN, null, null);
         }
     }
@@ -69,12 +74,14 @@ public final class TriggerManager implements Listener {
         }
         Entity attacker = event instanceof EntityDamageByEntityEvent byEntity ? attackerFrom(byEntity.getDamager()) : null;
         if (attacker instanceof LivingEntity livingAttacker && customMobId(livingAttacker).isPresent()) {
+            trackIfCustom(livingAttacker);
             runTriggers(livingAttacker, TriggerType.ON_HIT, target, null);
             if (isFatal(target, event.getFinalDamage())) {
                 runTriggers(livingAttacker, TriggerType.ON_KILL, target, null);
             }
         }
         if (customMobId(target).isPresent()) {
+            trackIfCustom(target);
             runTriggers(target, TriggerType.ON_HURT, null, attacker);
             if (isFatal(target, event.getFinalDamage())) {
                 damageTriggeredDeaths.add(target.getUniqueId());
@@ -87,6 +94,7 @@ public final class TriggerManager implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onDeath(EntityDeathEvent event) {
         LivingEntity entity = event.getEntity();
+        trackedCustomMobs.remove(entity.getUniqueId());
         if (damageTriggeredDeaths.remove(entity.getUniqueId())) {
             return;
         }
@@ -95,18 +103,38 @@ public final class TriggerManager implements Listener {
 
     private void tickSteps() {
         long tick = Bukkit.getCurrentTick();
-        for (World world : Bukkit.getWorlds()) {
-            for (LivingEntity entity : world.getLivingEntities()) {
-                Optional<CustomMobDefinition> definition = definitionFor(entity);
-                if (definition.isEmpty()) {
-                    continue;
-                }
-                for (MobTrigger trigger : definition.get().triggers()) {
-                    if (trigger.type() == TriggerType.ON_STEP && tick % trigger.stepRateTicks() == 0) {
-                        runTrigger(entity, trigger, null, null);
-                    }
+        Iterator<UUID> iterator = trackedCustomMobs.iterator();
+        while (iterator.hasNext()) {
+            Entity entity = Bukkit.getEntity(iterator.next());
+            if (!(entity instanceof LivingEntity livingEntity) || entity.isDead()) {
+                iterator.remove();
+                continue;
+            }
+            Optional<CustomMobDefinition> definition = definitionFor(livingEntity);
+            if (definition.isEmpty()) {
+                iterator.remove();
+                continue;
+            }
+            for (MobTrigger trigger : definition.get().triggers()) {
+                if (trigger.type() == TriggerType.ON_STEP && tick % trigger.stepRateTicks() == 0) {
+                    runTrigger(livingEntity, trigger, null, null);
                 }
             }
+        }
+    }
+
+    private void scanExistingCustomMobs() {
+        trackedCustomMobs.clear();
+        for (World world : Bukkit.getWorlds()) {
+            for (LivingEntity entity : world.getLivingEntities()) {
+                trackIfCustom(entity);
+            }
+        }
+    }
+
+    private void trackIfCustom(LivingEntity entity) {
+        if (customMobId(entity).isPresent()) {
+            trackedCustomMobs.add(entity.getUniqueId());
         }
     }
 

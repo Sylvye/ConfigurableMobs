@@ -1,8 +1,8 @@
 package com.bountysmp.configurablemobs.gui;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -13,7 +13,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class PromptManager implements Listener {
     private final JavaPlugin plugin;
-    private final Map<UUID, Consumer<String>> prompts = new HashMap<>();
+    private final Map<UUID, Consumer<String>> prompts = new ConcurrentHashMap<>();
 
     public PromptManager(JavaPlugin plugin) {
         this.plugin = plugin;
